@@ -1,0 +1,8 @@
+__pycache__/
+.env
+venv/
+.env.local
+*.pyc
+*.log
+node_modules/
+.streamlit/
