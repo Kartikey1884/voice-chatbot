@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groq Voice Assistant</title>
+    <style>
+        :root {
+            --bg: #0b1220;
+            --border: rgba(255, 255, 255, 0.10);
+            --text: #eaf0ff;
+            --muted: rgba(234, 240, 255, 0.7);
+            --accent: #4CAF50;
+            --danger: #ff4d4f;
+            --bubble-user: rgba(76, 175, 80, 0.18);
+            --bubble-bot: rgba(255, 255, 255, 0.08);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: radial-gradient(1200px 800px at 20% 0%, #263a7a 0%, var(--bg) 55%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .app {
+            width: 100%;
+            max-width: 860px;
+            height: min(86vh, 820px);
+            background: rgba(15, 26, 46, 0.75);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .title strong {
+            font-size: 14px;
+            letter-spacing: 0.2px;
+        }
+
+        .title span {
+            font-size: 12px;
+            color: var(--muted);
+            display: block;
+            margin-top: 2px;
+        }
+
+        .badge {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .messages {
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .msg {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .msg.user {
+            justify-content: flex-end;
+        }
+
+        .bubble {
+            max-width: 80%;
+            padding: 10px 12px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: var(--bubble-bot);
+            white-space: pre-wrap;
+            line-height: 1.35;
+            font-size: 14px;
+        }
+
+        .msg.user .bubble {
+            background: var(--bubble-user);
+            border-color: rgba(76, 175, 80, 0.25);
+        }
+
+        .status {
+            padding: 8px 12px 0 12px;
+            color: var(--muted);
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 28px;
+        }
+
+        .composer {
+            border-top: 1px solid var(--border);
+            padding: 16px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            background: rgba(11, 18, 32, 0.35);
+        }
+
+        .mode-toggle {
+            display: flex;
+            gap: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .mode-btn {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .mode-btn.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .text-input-area {
+            flex: 1;
+            display: flex;
+            gap: 8px;
+        }
+
+        .text-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px 14px;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .text-input:focus {
+            border-color: var(--accent);
+        }
+
+        .send-btn {
+            background: var(--accent);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .voice-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 3px solid var(--border);
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(76, 175, 80, 0.1));
+            color: var(--text);
+            cursor: pointer;
+            font-size: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .voice-btn:hover:not(:disabled) {
+            transform: scale(1.05);
+            border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+        }
+
+        .voice-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .voice-btn.recording {
+            background: linear-gradient(135deg, rgba(255, 77, 79, 0.3), rgba(255, 77, 79, 0.15));
+            border-color: var(--danger);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.7); }
+            50% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(255, 77, 79, 0); }
+        }
+
+        .waveform {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            height: 20px;
+        }
+
+        .waveform span {
+            width: 3px;
+            height: 4px;
+            background: var(--accent);
+            border-radius: 2px;
+            animation: wave 1s ease-in-out infinite;
+        }
+
+        .waveform span:nth-child(2) { animation-delay: 0.1s; }
+        .waveform span:nth-child(3) { animation-delay: 0.2s; }
+        .waveform span:nth-child(4) { animation-delay: 0.3s; }
+        .waveform span:nth-child(5) { animation-delay: 0.4s; }
+
+        @keyframes wave {
+            0%, 100% { height: 4px; }
+            50% { height: 16px; }
+        }
+
+        .btn {
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            padding: 8px 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .streaming-text {
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="header">
+            <div class="title">
+                <strong>⚡ Groq Voice Assistant</strong>
+                <span>Ultra-fast LLM • Free Edge TTS • Real-time</span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <span class="badge" id="statusBadge">Ready</span>
+                <button class="btn" onclick="clearChat()">Clear</button>
+            </div>
+        </div>
+
+        <div id="messages" class="messages">
+            <div class="msg bot">
+                <div class="bubble">Hi! I'm your voice assistant powered by Groq. Switch between voice and text mode below!</div>
+            </div>
+        </div>
+
+        <div>
+            <div id="status" class="status">Choose a mode to start</div>
+            <div class="composer">
+                <div class="mode-toggle">
+                    <button class="mode-btn active" onclick="switchMode('text')">💬 Text</button>
+                    <button class="mode-btn" onclick="switchMode('voice')">🎤 Voice</button>
+                </div>
+
+                <!-- Text Mode Input -->
+                <div id="textMode" class="text-input-area">
+                    <input type="text" class="text-input" id="textInput" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+                    <button class="send-btn" id="sendBtn" onclick="sendTextMessage()">Send</button>
+                </div>
+
+                <!-- Voice Mode Input -->
+                <button class="voice-btn hidden" id="voiceBtn" onclick="toggleVoice()">🎤</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let sessionId = crypto.randomUUID();
+        let currentBotMessage = null;
+        let currentMode = 'text';
+
+        const statusEl = document.getElementById("status");
+        const statusBadgeEl = document.getElementById("statusBadge");
+        const messagesEl = document.getElementById("messages");
+        const voiceBtnEl = document.getElementById("voiceBtn");
+        const textInputEl = document.getElementById("textInput");
+        const sendBtnEl = document.getElementById("sendBtn");
+        const textModeEl = document.getElementById("textMode");
+
+        // Initialize connection
+        connectWebSocket();
+
+        function switchMode(mode) {
+            currentMode = mode;
+            
+            // Update button styles
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Toggle UI
+            if (mode === 'voice') {
+                textModeEl.classList.add('hidden');
+                voiceBtnEl.classList.remove('hidden');
+                setStatus("Click the microphone to start");
+            } else {
+                textModeEl.classList.remove('hidden');
+                voiceBtnEl.classList.add('hidden');
+                setStatus("Type your message and press Send");
+            }
+        }
+
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) return;
+
+            setStatus("Connecting...");
+            statusBadgeEl.textContent = "Connecting";
+            statusBadgeEl.style.background = "rgba(255, 165, 0, 0.2)";
+            
+            ws = new WebSocket("ws://localhost:8000/ws/voice");
+            
+            ws.onopen = () => {
+                setStatus("Connected! Ready to chat");
+                statusBadgeEl.textContent = "Connected";
+                statusBadgeEl.style.background = "rgba(76, 175, 80, 0.2)";
+            };
+            
+            ws.onmessage = handleWebSocketMessage;
+            
+            ws.onerror = () => {
+                setStatus("Connection error");
+                statusBadgeEl.textContent = "Error";
+                statusBadgeEl.style.background = "rgba(255, 77, 79, 0.2)";
+            };
+            
+            ws.onclose = () => {
+                setStatus("Disconnected - Reconnecting...");
+                statusBadgeEl.textContent = "Disconnected";
+                statusBadgeEl.style.background = "rgba(255, 255, 255, 0.1)";
+                setTimeout(connectWebSocket, 2000);
+            };
+        }
+
+        async function sendTextMessage() {
+            const text = textInputEl.value.trim();
+            if (!text) return;
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                setStatus("Not connected. Reconnecting...");
+                connectWebSocket();
+                return;
+            }
+
+            // Add user message
+            addMessage("user", text);
+            textInputEl.value = "";
+            sendBtnEl.disabled = true;
+            setStatus("Assistant thinking...");
+
+            // Send to server
+            ws.send(JSON.stringify({
+                type: "text",
+                text: text,
+                session_id: sessionId
+            }));
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendTextMessage();
+            }
+        }
+
+        async function toggleVoice() {
+            if (!isRecording) {
+                await startRecording();
+            } else {
+                await stopRecording();
+            }
+        }
+
+        async function startRecording() {
+            try {
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    setStatus("Not connected. Please wait...");
+                    connectWebSocket();
+                    return;
+                }
+
+                // Start recording
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) {
+                        audioChunks.push(e.data);
+                    }
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                
+                voiceBtnEl.classList.add("recording");
+                voiceBtnEl.textContent = "⏹";
+                setStatus("🔴 Recording... Click to stop", true);
+
+            } catch (error) {
+                setStatus(`Error: ${error.message}`);
+                console.error(error);
+            }
+        }
+
+        async function stopRecording() {
+            if (!mediaRecorder || !isRecording) return;
+
+            mediaRecorder.stop();
+            isRecording = false;
+            voiceBtnEl.classList.remove("recording");
+            voiceBtnEl.textContent = "⏳";
+            voiceBtnEl.disabled = true;
+            setStatus("Processing...");
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                const reader = new FileReader();
+                
+                reader.onloadend = () => {
+                    const base64Audio = reader.result.split(',')[1];
+                    
+                    // Send to server
+                    ws.send(JSON.stringify({
+                        type: "audio",
+                        audio: base64Audio,
+                        session_id: sessionId
+                    }));
+                };
+                
+                reader.readAsDataURL(audioBlob);
+                
+                // Stop stream
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            };
+        }
+
+        function handleWebSocketMessage(event) {
+            const data = JSON.parse(event.data);
+
+            if (data.type === "transcription") {
+                addMessage("user", data.text);
+                setStatus("Assistant thinking...");
+            }
+            else if (data.type === "text_chunk") {
+                // Stream text as it comes
+                if (!currentBotMessage) {
+                    currentBotMessage = addMessage("bot", "", true);
+                }
+                currentBotMessage.textContent += data.text;
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+            else if (data.type === "text_complete") {
+                // Text chat completed
+                if (currentBotMessage) {
+                    currentBotMessage.classList.remove("streaming-text");
+                    currentBotMessage = null;
+                }
+                sendBtnEl.disabled = false;
+                setStatus("Type your message");
+            }
+            else if (data.type === "audio") {
+                // Finalize text
+                if (currentBotMessage) {
+                    currentBotMessage.classList.remove("streaming-text");
+                    currentBotMessage = null;
+                }
+                
+                // Play audio
+                playAudio(data.audio);
+                
+                // Ready for next input
+                voiceBtnEl.textContent = "🎤";
+                voiceBtnEl.disabled = false;
+                setStatus("Click to speak again");
+            }
+            else if (data.type === "status") {
+                setStatus(data.message);
+            }
+            else if (data.type === "error") {
+                setStatus(`Error: ${data.message}`);
+                voiceBtnEl.textContent = "🎤";
+                voiceBtnEl.disabled = false;
+                sendBtnEl.disabled = false;
+            }
+        }
+
+        function playAudio(base64Audio) {
+            const audioData = atob(base64Audio);
+            const arrayBuffer = new ArrayBuffer(audioData.length);
+            const view = new Uint8Array(arrayBuffer);
+            
+            for (let i = 0; i < audioData.length; i++) {
+                view[i] = audioData.charCodeAt(i);
+            }
+            
+            const blob = new Blob([arrayBuffer], { type: 'audio/mp3' });
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            
+            audio.play();
+            
+            audio.onended = () => {
+                URL.revokeObjectURL(url);
+            };
+        }
+
+        function addMessage(role, text, isStreaming = false) {
+            const row = document.createElement("div");
+            row.className = `msg ${role}`;
+
+            const bubble = document.createElement("div");
+            bubble.className = "bubble";
+            if (isStreaming) {
+                bubble.classList.add("streaming-text");
+            }
+            bubble.textContent = text;
+
+            row.appendChild(bubble);
+            messagesEl.appendChild(row);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            
+            return bubble;
+        }
+
+        function clearChat() {
+            messagesEl.innerHTML = `
+                <div class="msg bot">
+                    <div class="bubble">Chat cleared. Choose your mode and start fresh!</div>
+                </div>
+            `;
+            sessionId = crypto.randomUUID();
+            currentBotMessage = null;
+        }
+
+        function setStatus(text, showWave = false) {
+            if (showWave) {
+                statusEl.innerHTML = `
+                    <div class="waveform">
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                    <span>${text}</span>
+                `;
+            } else {
+                statusEl.textContent = text;
+            }
+        }
+    </script>
+</body>
+</html>
