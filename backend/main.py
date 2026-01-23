@@ -37,6 +37,15 @@ app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
 # Initialize chatbot
 chatbot = ChatBot()
 
+# from fastapi import Response
+
+# @app.get("/favicon.ico", include_in_schema=False)
+# async def favicon():
+#     if (frontend_path / "favicon.ico").exists():
+#         return FileResponse(str(frontend_path / "favicon.ico"))
+#     return Response(status_code=204)
+
+
 
 @app.websocket("/ws/text")
 async def text_chat_websocket(websocket: WebSocket):

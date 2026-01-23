@@ -1,0 +1,52 @@
+project_name/
+│
+├── app/
+│   ├── main.py                 # FastAPI app entry
+│   │
+│   ├── api/                    # All route files
+│   │   ├── __init__.py
+│   │   ├── chat.py
+│   │   ├── users.py
+│   │   └── voice.py
+│   │
+│   ├── core/                   # Config & system setup
+│   │   ├── config.py           # env loader
+│   │   ├── database.py         # DB connection
+│   │   ├── logging.py
+│   │   └── security.py
+│   │
+│   ├── models/                 # DB tables (ORM)
+│   │   ├── user.py
+│   │   └── chat_history.py
+│   │
+│   ├── services/               # Business logic
+│   │   ├── chatbot.py
+│   │   ├── speech_to_text.py
+│   │   ├── text_to_speech.py
+│   │   └── user_service.py
+│   │
+│   ├── schemas/                # Pydantic request/response
+│   │   └── user_schema.py
+│   │
+│   ├── static/                 # CSS, JS, images
+│   │   ├── style.css
+│   │   └── script.js
+│   │
+│   ├── templates/              # HTML pages
+│   │   └── index.html
+│   │
+│   └── data/                   # JSON, CSV, seed files
+│       ├── users.json
+│       ├── prompts.json
+│       └── seed_data.json
+│
+├── migrations/                 # Alembic DB migrations
+│
+├── logs/                       # App logs
+│   └── app.log
+│
+├── tests/                      # Unit & API tests
+│
+├── .env                        # Secrets
+├── requirements.txt
+└── README.md
