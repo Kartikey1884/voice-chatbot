@@ -2,7 +2,7 @@
 Main FastAPI application - WebSocket server for voice and text chat
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -136,6 +136,12 @@ async def health():
         "stt": "faster-whisper"
     }
 
+#to handle the uvicorn root path
+@app.get("/favicon.ico")
+async def favicon():
+    if (frontend_path / "favicon.ico").exists():
+        return FileResponse(str(frontend_path / "favicon.ico"))
+    return HTTPException(status_code=404, detail="there is no favicon.ico")
 
 @app.get("/")
 async def root():
