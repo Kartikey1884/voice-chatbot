@@ -1,29 +1,73 @@
-let audioContext;
-let analyser;
-let silenceTimer = null;
+/**
+ * GOOGLE ASSISTANT STYLE VOICE INTERACTION
+ * 
+ * Features:
+ * - Continuous listening with Voice Activity Detection (VAD)
+ * - Automatic turn-taking (no button holding needed)
+ * - Real-time visual feedback
+ * - Barge-in support (interrupt assistant while speaking)
+ * - Natural conversation flow
+ */
 
-let textWs = null;
+// ========================================
+// Voice Interaction States
+// ========================================
+const VoiceState = {
+    IDLE: 'idle',                    // Not active
+    LISTENING: 'listening',          // Listening for speech
+    PROCESSING: 'processing',        // Processing input
+    SPEAKING: 'speaking',            // Assistant speaking
+    WAITING: 'waiting'               // Waiting for user to finish
+};
+
+// ========================================
+// Global State
+// ========================================
+let currentState = VoiceState.IDLE;
 let voiceWs = null;
+let textWs = null;
 
-let mediaRecorder = null;
+let sessionId = crypto.randomUUID();
+let currentMode = 'text';
+
+// Audio recording
+let mediaStream = null;
+let audioContext = null;
+let analyser = null;
+let scriptProcessor = null;
 let audioChunks = [];
 let isRecording = false;
-let sessionId = crypto.randomUUID(); // ONE session ID for entire page session
-let currentBotMessage = null;
-let currentMode = 'text';
-let isPlayingAudio = false;
-let currentAudioElement = null; // Track current audio element
-let autoStartEnabled = true; // Flag to control auto-start after bot responses
 
+// Voice Activity Detection
+let vadActive = false;
+let speechDetected = false;
+let silenceStart = null;
+let lastSoundTime = null;
+const SILENCE_THRESHOLD = 1.5;  // seconds of silence to stop
+const SPEECH_THRESHOLD = 0.02;  // amplitude threshold for speech
+const MIN_SPEECH_DURATION = 0.3; // minimum speech duration in seconds
+
+// UI state
+let currentBotMessage = null;
+let currentAudioElement = null;
+let isPlayingAudio = false;
+
+// ========================================
+// DOM Elements
+// ========================================
 const statusEl = document.getElementById("status");
 const statusBadgeEl = document.getElementById("statusBadge");
 const messagesEl = document.getElementById("messages");
-const voiceBtnEl = document.getElementById("voiceBtn");
-const textInputEl = document.getElementById("textInput");
-const sendBtnEl = document.getElementById("sendBtn");
+const voiceBtn = document.getElementById("voiceBtn");
+const textInput = document.getElementById("textInput");
+const sendBtn = document.getElementById("sendBtn");
 const textModeEl = document.getElementById("textMode");
+const visualizerCanvas = document.getElementById("visualizer");
+const visualizerCtx = visualizerCanvas?.getContext("2d");
 
-/* -------- MODE SWITCH -------- */
+// ========================================
+// Mode Switching
+// ========================================
 function switchMode(mode, btn) {
     const previousMode = currentMode;
     currentMode = mode;
@@ -33,149 +77,72 @@ function switchMode(mode, btn) {
 
     if (mode === 'voice') {
         textModeEl.classList.add('hidden');
-        voiceBtnEl.classList.remove('hidden');
+        voiceBtn.classList.remove('hidden');
 
-        // Close text websocket if open
         if (textWs && textWs.readyState === WebSocket.OPEN) {
             textWs.close();
-            textWs = null;
         }
 
         connectVoiceWebSocket();
 
-        // Show mode switch message
         if (previousMode === 'text') {
-            addMessage("system", "🎤 Switched to voice mode - Your conversation continues");
+            addMessage("system", "🎤 Voice mode activated - Say something!");
         }
-        setStatus("Connecting to voice chat...");
     } else {
         textModeEl.classList.remove('hidden');
-        voiceBtnEl.classList.add('hidden');
+        voiceBtn.classList.add('hidden');
 
-        // Close voice websocket if open
         if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
             voiceWs.close();
-            voiceWs = null;
         }
 
-        // Stop any ongoing recording
-        if (isRecording) {
-            stopRecording();
-        }
-
-        // Stop any playing audio
-        if (currentAudioElement) {
-            currentAudioElement.pause();
-            currentAudioElement = null;
-            isPlayingAudio = false;
-        }
-
+        stopVoiceInteraction();
         connectTextWebSocket();
 
-        // Show mode switch message
         if (previousMode === 'voice') {
-            addMessage("system", "💬 Switched to text mode - Your conversation continues");
+            addMessage("system", "💬 Text mode activated");
         }
-        setStatus("Type your message and press Send");
     }
 }
 
-/* -------- TEXT SOCKET -------- */
+// ========================================
+// Text Chat WebSocket
+// ========================================
 function connectTextWebSocket() {
     if (textWs && textWs.readyState === WebSocket.OPEN) return;
 
-    setStatus("Connecting to text chat...");
+    setStatus("Connecting...");
     updateBadge("Connecting", "rgba(255,165,0,0.2)");
 
     textWs = new WebSocket("ws://localhost:8000/ws/text");
 
     textWs.onopen = () => {
-        setStatus("Connected! Ready to chat");
+        setStatus("Ready to chat");
         updateBadge("Connected", "rgba(76,175,80,0.2)");
-        console.log("📝 Text mode connected with session:", sessionId);
+        console.log("📝 Text mode connected:", sessionId);
     };
 
     textWs.onmessage = handleTextMessage;
 
     textWs.onerror = (error) => {
         console.error("❌ Text WebSocket error:", error);
-        console.error("WebSocket state:", textWs.readyState);
-        setStatus("Text chat connection error");
+        setStatus("Connection error");
         updateBadge("Error", "rgba(244,67,54,0.2)");
-        addMessage("system", "⚠️ Text connection error. Please check if the server is running.");
     };
 
     textWs.onclose = () => {
-        setStatus("Text chat disconnected");
+        setStatus("Disconnected");
         updateBadge("Disconnected", "rgba(158,158,158,0.2)");
     };
-}
-
-/* -------- VOICE SOCKET -------- */
-function connectVoiceWebSocket() {
-    if (voiceWs && voiceWs.readyState === WebSocket.OPEN) return;
-
-    setStatus("Connecting to voice chat...");
-    updateBadge("Connecting", "rgba(255,165,0,0.2)");
-
-    voiceWs = new WebSocket("ws://localhost:8000/ws/voice");
-
-    voiceWs.onopen = () => {
-        setStatus("Connecting...");
-        updateBadge("Connected", "rgba(76,175,80,0.2)");
-        console.log("🎤 Voice mode connected with session:", sessionId);
-
-        // 👋 Send greeting request with SAME session ID
-        voiceWs.send(JSON.stringify({
-            type: "greet",
-            session_id: sessionId
-        }));
-    };
-
-    voiceWs.onmessage = handleVoiceMessage;
-
-    voiceWs.onerror = (error) => {
-        console.error("❌ Voice WebSocket error:", error);
-        console.error("WebSocket state:", voiceWs.readyState);
-        setStatus("Voice chat connection error");
-        updateBadge("Error", "rgba(244,67,54,0.2)");
-        addMessage("system", "⚠️ Voice connection error. Please check if the server is running.");
-    };
-
-    voiceWs.onclose = () => {
-        setStatus("Voice chat disconnected");
-        updateBadge("Disconnected", "rgba(158,158,158,0.2)");
-    };
-}
-
-/* -------- TEXT -------- */
-function sendTextMessage() {
-    const text = textInputEl.value.trim();
-    if (!text) return;
-
-    if (!textWs || textWs.readyState !== WebSocket.OPEN) {
-        setStatus("Not connected to server");
-        updateBadge("Disconnected", "rgba(244,67,54,0.2)");
-        return;
-    }
-
-    addMessage("user", text);
-    textInputEl.value = "";
-    setStatus("Assistant thinking...");
-
-    // Send with shared session ID
-    textWs.send(JSON.stringify({
-        type: "text",
-        text: text,
-        session_id: sessionId
-    }));
 }
 
 function handleTextMessage(event) {
     const data = JSON.parse(event.data);
 
     if (data.type === "text_chunk") {
-        if (!currentBotMessage) currentBotMessage = addMessage("bot", "", true);
+        if (!currentBotMessage) {
+            currentBotMessage = addMessage("bot", "", true);
+        }
         currentBotMessage.textContent += data.text;
         messagesEl.scrollTop = messagesEl.scrollHeight;
     }
@@ -191,6 +158,26 @@ function handleTextMessage(event) {
     }
 }
 
+function sendTextMessage() {
+    const text = textInput.value.trim();
+    if (!text) return;
+
+    if (!textWs || textWs.readyState !== WebSocket.OPEN) {
+        setStatus("Not connected");
+        return;
+    }
+
+    addMessage("user", text);
+    textInput.value = "";
+    setStatus("Thinking...");
+
+    textWs.send(JSON.stringify({
+        type: "text",
+        text: text,
+        session_id: sessionId
+    }));
+}
+
 function handleKeyPress(event) {
     if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
@@ -198,225 +185,65 @@ function handleKeyPress(event) {
     }
 }
 
-/* -------- VOICE -------- */
-async function toggleVoice() {
-    // Don't allow starting recording while audio is playing
-    if (isPlayingAudio) {
-        setStatus("Please wait for the assistant to finish speaking");
-        return;
-    }
+// ========================================
+// Voice Chat WebSocket
+// ========================================
+function connectVoiceWebSocket() {
+    if (voiceWs && voiceWs.readyState === WebSocket.OPEN) return;
 
-    if (!isRecording) {
-        autoStartEnabled = true; // Enable auto-start when user manually starts
-        startRecording();
-    } else {
-        autoStartEnabled = false; // Disable auto-start when user manually stops
-        stopRecording();
-    }
-}
+    setStatus("Connecting to voice...");
+    updateBadge("Connecting", "rgba(255,165,0,0.2)");
 
-async function startRecording() {
-    // Prevent double-recording
-    if (isRecording) {
-        console.log("⚠️ Already recording, ignoring start request");
-        return;
-    }
+    voiceWs = new WebSocket("ws://localhost:8000/ws/voice");
 
-    try {
-        // 🎯 Notify backend that user started speaking (reset timer & interrupt audio)
-        if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
-            voiceWs.send(JSON.stringify({
-                type: "user_speaking"
-            }));
-            console.log("🎤 User started speaking - backend notified");
-        } else {
-            console.warn("⚠️ Voice WebSocket not connected, cannot notify backend");
-        }
+    voiceWs.onopen = () => {
+        setStatus("Connected");
+        updateBadge("Connected", "rgba(76,175,80,0.2)");
+        console.log("🎤 Voice mode connected:", sessionId);
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-            }
-        });
-
-        audioContext = new AudioContext();
-        const source = audioContext.createMediaStreamSource(stream);
-
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048;
-
-        source.connect(analyser);
-
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        mediaRecorder.start();
-
-        isRecording = true;
-        voiceBtnEl.classList.add("recording");
-        voiceBtnEl.textContent = "⏹";
-        setStatus("Listening... (auto-stops on silence)");
-
-        detectSilence();
-    } catch (error) {
-        console.error("❌ Error starting recording:", error);
-        console.error("Error details:", {
-            name: error.name,
-            message: error.message,
-            stack: error.stack
-        });
-
-        let errorMessage = "Microphone access denied";
-        if (error.name === "NotAllowedError") {
-            errorMessage = "⚠️ Microphone permission denied. Please allow microphone access in your browser settings.";
-        } else if (error.name === "NotFoundError") {
-            errorMessage = "⚠️ No microphone found. Please connect a microphone and try again.";
-        } else if (error.name === "NotReadableError") {
-            errorMessage = "⚠️ Microphone is being used by another application. Please close other apps using the microphone.";
-        } else {
-            errorMessage = `⚠️ Error accessing microphone: ${error.message}`;
-        }
-
-        setStatus(errorMessage);
-        addMessage("system", errorMessage);
-    }
-}
-
-function detectSilence() {
-    const buffer = new Uint8Array(analyser.fftSize);
-
-    function check() {
-        analyser.getByteTimeDomainData(buffer);
-
-        let max = 0;
-        for (let i = 0; i < buffer.length; i++) {
-            const v = Math.abs(buffer[i] - 128);
-            if (v > max) max = v;
-        }
-
-        // Silence threshold - adjust if needed (lower = more sensitive)
-        if (max < 5) {
-            if (!silenceTimer) {
-                silenceTimer = setTimeout(() => {
-                    console.log("🔇 Silence detected - stopping recording");
-                    stopRecording();
-                }, 1000); // 1 second of silence (as per requirements)
-            }
-        } else {
-            clearTimeout(silenceTimer);
-            silenceTimer = null;
-        }
-
-        if (isRecording) requestAnimationFrame(check);
-    }
-
-    check();
-}
-
-async function stopRecording() {
-    if (!mediaRecorder || mediaRecorder.state === "inactive") return;
-
-    mediaRecorder.stop();
-    isRecording = false;
-
-    mediaRecorder.onstop = async () => {
-        const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
-        const contextToUse = audioContext; // Store reference before cleanup
-        const streamToStop = mediaRecorder.stream;
-
-        // Convert to WAV format for better compatibility with Whisper
-        try {
-            if (contextToUse && contextToUse.state !== 'closed') {
-                const arrayBuffer = await blob.arrayBuffer();
-                const audioBuffer = await contextToUse.decodeAudioData(arrayBuffer);
-                const wavBlob = audioBufferToWav(audioBuffer);
-
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
-                        // Send with shared session ID
-                        voiceWs.send(JSON.stringify({
-                            type: "audio",
-                            audio: reader.result.split(",")[1],
-                            session_id: sessionId
-                        }));
-                        setStatus("Processing your voice...");
-                        console.log("📤 Audio sent to backend (WAV format)");
-                    } else {
-                        setStatus("Not connected to voice chat");
-                        addMessage("system", "⚠️ Voice connection lost. Please reconnect.");
-                    }
-                };
-                reader.readAsDataURL(wavBlob);
-            } else {
-                throw new Error("AudioContext not available");
-            }
-        } catch (error) {
-            console.error("❌ Error converting audio to WAV:", error);
-            console.error("Error details:", {
-                name: error.name,
-                message: error.message,
-                contextState: contextToUse ? contextToUse.state : "null"
-            });
-
-            // Fallback: send original blob (Whisper can handle various formats)
-            try {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
-                        voiceWs.send(JSON.stringify({
-                            type: "audio",
-                            audio: reader.result.split(",")[1],
-                            session_id: sessionId
-                        }));
-                        setStatus("Processing your voice...");
-                        console.log("📤 Audio sent to backend (original format - fallback)");
-                    } else {
-                        console.error("❌ Voice WebSocket not connected");
-                        setStatus("Connection lost. Please reconnect.");
-                    }
-                };
-                reader.onerror = (err) => {
-                    console.error("❌ FileReader error:", err);
-                    setStatus("Error reading audio file");
-                };
-                reader.readAsDataURL(blob);
-            } catch (fallbackError) {
-                console.error("❌ Fallback also failed:", fallbackError);
-                setStatus("Error processing audio. Please try again.");
-                addMessage("system", "⚠️ Error processing audio. Please try recording again.");
-            }
-        }
-
-        // Clean up audio resources
-        if (streamToStop) {
-            streamToStop.getTracks().forEach(track => track.stop());
-        }
-        if (contextToUse && contextToUse.state !== 'closed') {
-            contextToUse.close();
-        }
-        audioContext = null;
+        // Activate voice mode
+        voiceWs.send(JSON.stringify({
+            type: "activate",
+            session_id: sessionId
+        }));
     };
 
-    voiceBtnEl.classList.remove("recording");
-    voiceBtnEl.textContent = "🎤";
-    clearTimeout(silenceTimer);
-    silenceTimer = null;
+    voiceWs.onmessage = handleVoiceMessage;
+
+    voiceWs.onerror = (error) => {
+        console.error("❌ Voice WebSocket error:", error);
+        setStatus("Voice connection error");
+        updateBadge("Error", "rgba(244,67,54,0.2)");
+    };
+
+    voiceWs.onclose = () => {
+        setStatus("Voice disconnected");
+        updateBadge("Disconnected", "rgba(158,158,158,0.2)");
+        stopVoiceInteraction();
+    };
 }
 
-/* -------- VOICE MESSAGE -------- */
 function handleVoiceMessage(event) {
     const data = JSON.parse(event.data);
 
-    if (data.type === "transcription") {
-        addMessage("user", data.text);
-        setStatus("Assistant thinking...");
+    // State change
+    if (data.type === "state_change") {
+        handleStateChange(data.state, data.message);
     }
 
-    // Handle streaming text chunks during voice responses
+    // Transcription (final)
+    if (data.type === "transcription" && data.is_final) {
+        addMessage("user", data.text);
+        setStatus("Processing...");
+    }
+
+    // Interim transcription (real-time)
+    if (data.type === "interim_transcript") {
+        // Show real-time transcription in UI
+        setStatus(`Hearing: "${data.text}"`);
+    }
+
+    // Text streaming from LLM
     if (data.type === "text_chunk") {
         if (!currentBotMessage) {
             currentBotMessage = addMessage("bot", "", true);
@@ -426,12 +253,11 @@ function handleVoiceMessage(event) {
     }
 
     if (data.type === "text_complete") {
-        // Text streaming complete, audio will follow
         currentBotMessage = null;
     }
 
-    if (data.type === "audio") {
-        // If we have a streaming message, update it with final text, otherwise create new
+    // Audio response
+    if (data.type === "audio_response") {
         if (currentBotMessage) {
             currentBotMessage.textContent = data.text;
             currentBotMessage = null;
@@ -439,122 +265,485 @@ function handleVoiceMessage(event) {
             addMessage("bot", data.text);
         }
 
-        // Play audio response
-        isPlayingAudio = true;
-        const audio = new Audio("data:audio/mp3;base64," + data.audio);
-        currentAudioElement = audio; // Store reference
-
-        audio.onended = () => {
-            isPlayingAudio = false;
-            currentAudioElement = null;
-            setStatus("Listening... (auto-stops on silence)");
-
-            // 🎯 Notify backend that audio finished playing
-            if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
-                voiceWs.send(JSON.stringify({
-                    type: "audio_finished"
-                }));
-                console.log("🔊 Audio playback finished");
-            }
-
-            // Auto-start recording after bot finishes speaking (ChatGPT-style)
-            // Re-enable auto-start after bot responds (natural conversation flow)
-            autoStartEnabled = true;
-
-            // Wait a bit longer to ensure audio is fully stopped and user can process the response
-            setTimeout(() => {
-                // Only auto-start if:
-                // 1. Not already recording
-                // 2. Not playing audio
-                // 3. Still in voice mode
-                // 4. WebSocket is connected
-                // 5. Auto-start is enabled
-                if (!isRecording && !isPlayingAudio && currentMode === 'voice' &&
-                    voiceWs && voiceWs.readyState === WebSocket.OPEN && autoStartEnabled) {
-                    console.log("🎤 Auto-starting recording after bot response");
-                    startRecording();
-                }
-            }, 500); // Small delay to ensure audio is fully stopped
-        };
-
-        audio.onerror = (error) => {
-            console.error("Audio playback error:", error);
-            isPlayingAudio = false;
-            currentAudioElement = null;
-            setStatus("Audio playback failed");
-
-            // Even on error, notify backend
-            if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
-                voiceWs.send(JSON.stringify({
-                    type: "audio_finished"
-                }));
-            }
-        };
-
-        audio.play().catch(err => {
-            console.error("Audio play error:", err);
-            isPlayingAudio = false;
-            currentAudioElement = null;
-            setStatus("Could not play audio");
-        });
-        setStatus("Assistant speaking...");
+        playAudioResponse(data.audio);
     }
 
-    // ⭐ NEW: Handle interrupt_audio from backend
-    if (data.type === "interrupt_audio") {
+    // Text only (if TTS failed)
+    if (data.type === "text_only") {
+        if (currentBotMessage) {
+            currentBotMessage.textContent = data.text;
+            currentBotMessage = null;
+        } else {
+            addMessage("bot", data.text);
+        }
+
+        // Go back to listening
+        if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+            voiceWs.send(JSON.stringify({
+                type: "audio_playback_finished"
+            }));
+        }
+    }
+
+    // Interrupt playback command
+    if (data.type === "interrupt_playback") {
         if (currentAudioElement) {
-            console.log("🔇 Bot audio interrupted by user");
             currentAudioElement.pause();
-            currentAudioElement.currentTime = 0;
             currentAudioElement = null;
             isPlayingAudio = false;
-            setStatus("Listening...");
-
-            // Notify backend that audio was interrupted
-            if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
-                voiceWs.send(JSON.stringify({
-                    type: "audio_finished"
-                }));
-            }
         }
     }
 
-    if (data.type === "status") {
-        setStatus(data.message);
+    // Timeout warning
+    if (data.type === "timeout_warning") {
+        setStatus(`⏱️ Session ending in ${data.seconds_remaining}s...`);
     }
 
+    // Session end
     if (data.type === "session_end") {
-        setStatus("Session ended. Click microphone to start again.");
-        updateBadge("Session Ended", "rgba(255,152,0,0.2)");
-
-        // Close voice websocket
-        if (voiceWs) {
-            voiceWs.close();
-            voiceWs = null;
-        }
-
-        // Create NEW session ID for next conversation
-        sessionId = crypto.randomUUID();
-        console.log("🔄 New session created:", sessionId);
-
-        // Show reconnect message after a delay
-        setTimeout(() => {
-            addMessage("system", "💬 Session ended. Click the microphone to start a new conversation.");
-        }, 1000);
+        handleSessionEnd(data.reason);
     }
 
+    // Error
     if (data.type === "error") {
         setStatus("Error: " + data.message);
         addMessage("system", "⚠️ " + data.message);
     }
 
+    // Pong
     if (data.type === "pong") {
-        // Keep-alive response
+        // Heartbeat response
     }
-
 }
 
-/* -------- UI -------- */
+function handleStateChange(state, message) {
+    currentState = state;
+
+    // Update UI based on state
+    switch (state) {
+        case VoiceState.IDLE:
+            setStatus("Click microphone to start");
+            updateBadge("Idle", "rgba(158,158,158,0.2)");
+            voiceBtn.classList.remove("listening", "processing", "speaking");
+            voiceBtn.textContent = "🎤";
+            break;
+
+        case VoiceState.LISTENING:
+            setStatus(message || "I'm listening...");
+            updateBadge("Listening", "rgba(33,150,243,0.2)");
+            voiceBtn.classList.add("listening");
+            voiceBtn.classList.remove("processing", "speaking");
+            voiceBtn.textContent = "🎤";
+            
+            // Start recording if not already
+            if (!isRecording) {
+                startContinuousListening();
+            }
+            break;
+
+        case VoiceState.PROCESSING:
+            setStatus(message || "Processing...");
+            updateBadge("Processing", "rgba(255,152,0,0.2)");
+            voiceBtn.classList.add("processing");
+            voiceBtn.classList.remove("listening", "speaking");
+            voiceBtn.textContent = "⏳";
+            
+            // Stop recording
+            if (isRecording) {
+                stopRecording();
+            }
+            break;
+
+        case VoiceState.SPEAKING:
+            setStatus(message || "Speaking...");
+            updateBadge("Speaking", "rgba(156,39,176,0.2)");
+            voiceBtn.classList.add("speaking");
+            voiceBtn.classList.remove("listening", "processing");
+            voiceBtn.textContent = "🔊";
+            break;
+
+        case VoiceState.WAITING:
+            setStatus(message || "Waiting...");
+            updateBadge("Waiting", "rgba(255,193,7,0.2)");
+            break;
+    }
+}
+
+function playAudioResponse(audioBase64) {
+    isPlayingAudio = true;
+
+    const audio = new Audio("data:audio/mp3;base64," + audioBase64);
+    currentAudioElement = audio;
+
+    audio.onended = () => {
+        isPlayingAudio = false;
+        currentAudioElement = null;
+
+        // Notify backend that audio finished
+        if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+            voiceWs.send(JSON.stringify({
+                type: "audio_playback_finished"
+            }));
+        }
+
+        console.log("🔊 Audio finished");
+    };
+
+    audio.onerror = (error) => {
+        console.error("❌ Audio playback error:", error);
+        isPlayingAudio = false;
+        currentAudioElement = null;
+
+        if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+            voiceWs.send(JSON.stringify({
+                type: "audio_playback_finished"
+            }));
+        }
+    };
+
+    audio.play().catch(err => {
+        console.error("❌ Audio play error:", err);
+        isPlayingAudio = false;
+        currentAudioElement = null;
+    });
+}
+
+function handleSessionEnd(reason) {
+    stopVoiceInteraction();
+
+    if (reason === "timeout") {
+        addMessage("system", "⏱️ Session ended due to inactivity");
+    } else {
+        addMessage("system", "Session ended");
+    }
+
+    setStatus("Session ended");
+    updateBadge("Ended", "rgba(244,67,54,0.2)");
+
+    currentState = VoiceState.IDLE;
+    sessionId = crypto.randomUUID();
+
+    setTimeout(() => {
+        addMessage("system", "💬 Click microphone to start a new conversation");
+    }, 1000);
+}
+
+// ========================================
+// Voice Interaction - Continuous Listening
+// ========================================
+async function startContinuousListening() {
+    if (isRecording) {
+        console.log("⚠️ Already recording");
+        return;
+    }
+
+    try {
+        // Get microphone access
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                sampleRate: 16000
+            }
+        });
+
+        console.log("🎤 Started continuous listening");
+
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({
+            sampleRate: 16000
+        });
+
+        const source = audioContext.createMediaStreamSource(mediaStream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.8;
+
+        scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+
+        source.connect(analyser);
+        analyser.connect(scriptProcessor);
+        scriptProcessor.connect(audioContext.destination);
+
+        isRecording = true;
+        vadActive = true;
+        audioChunks = [];
+
+        // Voice Activity Detection
+        scriptProcessor.onaudioprocess = (e) => {
+            if (!vadActive) return;
+
+            const inputData = e.inputBuffer.getChannelData(0);
+            audioChunks.push(new Float32Array(inputData));
+
+            // Calculate RMS (Root Mean Square) for volume detection
+            let sum = 0;
+            for (let i = 0; i < inputData.length; i++) {
+                sum += inputData[i] * inputData[i];
+            }
+            const rms = Math.sqrt(sum / inputData.length);
+
+            // Detect speech
+            const now = Date.now();
+            if (rms > SPEECH_THRESHOLD) {
+                lastSoundTime = now;
+
+                if (!speechDetected) {
+                    speechDetected = true;
+                    console.log("🗣️ Speech detected");
+
+                    // Notify backend
+                    if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+                        voiceWs.send(JSON.stringify({
+                            type: "speech_detected"
+                        }));
+                    }
+                }
+            }
+
+            // Detect silence after speech
+            if (speechDetected && lastSoundTime) {
+                const silenceDuration = (now - lastSoundTime) / 1000;
+
+                if (silenceDuration >= SILENCE_THRESHOLD) {
+                    console.log("🛑 Silence detected, stopping");
+
+                    // Notify backend
+                    if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+                        voiceWs.send(JSON.stringify({
+                            type: "speech_ended"
+                        }));
+                    }
+
+                    // Send recorded audio
+                    sendRecordedAudio();
+
+                    // Reset for next utterance
+                    speechDetected = false;
+                    lastSoundTime = null;
+                    audioChunks = [];
+                }
+            }
+
+            // Update visualizer
+            updateVisualizer();
+        };
+
+        voiceBtn.classList.add("listening");
+
+    } catch (error) {
+        console.error("❌ Microphone error:", error);
+        setStatus("Microphone access denied");
+        addMessage("system", "⚠️ Please allow microphone access");
+    }
+}
+
+function stopRecording() {
+    if (!isRecording) return;
+
+    console.log("🛑 Stopping recording");
+
+    vadActive = false;
+    isRecording = false;
+
+    if (scriptProcessor) {
+        scriptProcessor.disconnect();
+        scriptProcessor = null;
+    }
+
+    if (analyser) {
+        analyser.disconnect();
+        analyser = null;
+    }
+
+    if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+    }
+
+    if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+    }
+
+    audioChunks = [];
+    speechDetected = false;
+    lastSoundTime = null;
+
+    voiceBtn.classList.remove("listening");
+}
+
+function sendRecordedAudio() {
+    if (audioChunks.length === 0) {
+        console.log("⚠️ No audio to send");
+        return;
+    }
+
+    try {
+        // Combine audio chunks
+        const totalLength = audioChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+        const combinedAudio = new Float32Array(totalLength);
+        let offset = 0;
+        for (const chunk of audioChunks) {
+            combinedAudio.set(chunk, offset);
+            offset += chunk.length;
+        }
+
+        // Convert to WAV
+        const wavBlob = floatTo16BitPCM(combinedAudio);
+        
+        // Convert to base64
+        const reader = new FileReader();
+        reader.onload = () => {
+            const base64Audio = reader.result.split(',')[1];
+
+            if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+                voiceWs.send(JSON.stringify({
+                    type: "audio",
+                    audio: base64Audio
+                }));
+
+                console.log("📤 Sent audio:", wavBlob.size, "bytes");
+            }
+        };
+        reader.readAsDataURL(wavBlob);
+
+    } catch (error) {
+        console.error("❌ Error sending audio:", error);
+    }
+}
+
+function floatTo16BitPCM(float32Array) {
+    const buffer = new ArrayBuffer(44 + float32Array.length * 2);
+    const view = new DataView(buffer);
+    
+    // WAV header
+    const writeString = (offset, string) => {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    };
+    
+    const sampleRate = 16000;
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + float32Array.length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true);
+    view.setUint16(32, numChannels * bitsPerSample / 8, true);
+    view.setUint16(34, bitsPerSample, true);
+    writeString(36, 'data');
+    view.setUint32(40, float32Array.length * 2, true);
+    
+    // Convert float to 16-bit PCM
+    let offset = 44;
+    for (let i = 0; i < float32Array.length; i++) {
+        const sample = Math.max(-1, Math.min(1, float32Array[i]));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+        offset += 2;
+    }
+    
+    return new Blob([buffer], { type: 'audio/wav' });
+}
+
+function updateVisualizer() {
+    if (!analyser || !visualizerCanvas) return;
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    analyser.getByteTimeDomainData(dataArray);
+
+    visualizerCtx.fillStyle = 'rgb(245, 245, 245)';
+    visualizerCtx.fillRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
+
+    visualizerCtx.lineWidth = 2;
+    visualizerCtx.strokeStyle = speechDetected ? 'rgb(76, 175, 80)' : 'rgb(33, 150, 243)';
+
+    visualizerCtx.beginPath();
+
+    const sliceWidth = visualizerCanvas.width / bufferLength;
+    let x = 0;
+
+    for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = v * visualizerCanvas.height / 2;
+
+        if (i === 0) {
+            visualizerCtx.moveTo(x, y);
+        } else {
+            visualizerCtx.lineTo(x, y);
+        }
+
+        x += sliceWidth;
+    }
+
+    visualizerCtx.lineTo(visualizerCanvas.width, visualizerCanvas.height / 2);
+    visualizerCtx.stroke();
+}
+
+function stopVoiceInteraction() {
+    stopRecording();
+
+    if (currentAudioElement) {
+        currentAudioElement.pause();
+        currentAudioElement = null;
+        isPlayingAudio = false;
+    }
+
+    currentState = VoiceState.IDLE;
+}
+
+// ========================================
+// Voice Button Click Handler
+// ========================================
+function toggleVoice() {
+    if (currentState === VoiceState.SPEAKING && isPlayingAudio) {
+        // Barge-in - interrupt the assistant
+        console.log("⚡ Barge-in!");
+
+        if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+            voiceWs.send(JSON.stringify({
+                type: "barge_in"
+            }));
+        }
+
+        if (currentAudioElement) {
+            currentAudioElement.pause();
+            currentAudioElement = null;
+            isPlayingAudio = false;
+        }
+
+        return;
+    }
+
+    if (currentState === VoiceState.IDLE) {
+        // Wake up
+        if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+            voiceWs.send(JSON.stringify({
+                type: "wake_up"
+            }));
+        }
+    } else if (currentState === VoiceState.LISTENING) {
+        // Stop listening
+        if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+            voiceWs.send(JSON.stringify({
+                type: "stop_listening"
+            }));
+        }
+        stopRecording();
+    }
+}
+
+// ========================================
+// UI Helpers
+// ========================================
 function addMessage(role, text, streaming = false) {
     const row = document.createElement("div");
     row.className = `msg ${role}`;
@@ -573,23 +762,11 @@ function addMessage(role, text, streaming = false) {
 
 function clearChat() {
     messagesEl.innerHTML = "";
-
-    // Generate NEW session ID
-    const oldSessionId = sessionId;
     sessionId = crypto.randomUUID();
 
-    console.log(`🗑️ Chat cleared. Old session: ${oldSessionId.substring(0, 8)}... → New session: ${sessionId.substring(0, 8)}...`);
-
     currentBotMessage = null;
+    stopVoiceInteraction();
 
-    // Stop any playing audio
-    if (currentAudioElement) {
-        currentAudioElement.pause();
-        currentAudioElement = null;
-        isPlayingAudio = false;
-    }
-
-    // Reconnect to current mode with new session
     if (currentMode === 'text') {
         if (textWs) textWs.close();
         connectTextWebSocket();
@@ -598,8 +775,8 @@ function clearChat() {
         connectVoiceWebSocket();
     }
 
-    setStatus("Chat cleared. Starting fresh conversation...");
-    addMessage("system", "🔄 New conversation started");
+    setStatus("New conversation started");
+    addMessage("system", "🔄 Chat cleared");
 }
 
 function setStatus(text) {
@@ -611,67 +788,23 @@ function updateBadge(text, color) {
     statusBadgeEl.style.background = color;
 }
 
-// 🔥 Auto-start text chat when page loads
+// ========================================
+// Initialize
+// ========================================
 window.addEventListener("load", () => {
     connectTextWebSocket();
-    setStatus("Connected! Type your message...");
+    setStatus("Ready to chat");
     console.log("🚀 Session started:", sessionId);
+
+    // Setup visualizer if canvas exists
+    if (visualizerCanvas) {
+        visualizerCanvas.width = visualizerCanvas.offsetWidth;
+        visualizerCanvas.height = visualizerCanvas.offsetHeight;
+    }
 });
 
-// Helper function to convert AudioBuffer to WAV
-function audioBufferToWav(buffer) {
-    const length = buffer.length;
-    const numberOfChannels = buffer.numberOfChannels;
-    const sampleRate = buffer.sampleRate;
-    const bytesPerSample = 2;
-    const blockAlign = numberOfChannels * bytesPerSample;
-    const byteRate = sampleRate * blockAlign;
-    const dataSize = length * blockAlign;
-    const bufferSize = 44 + dataSize;
-    const arrayBuffer = new ArrayBuffer(bufferSize);
-    const view = new DataView(arrayBuffer);
-
-    // WAV header
-    const writeString = (offset, string) => {
-        for (let i = 0; i < string.length; i++) {
-            view.setUint8(offset + i, string.charCodeAt(i));
-        }
-    };
-
-    writeString(0, 'RIFF');
-    view.setUint32(4, bufferSize - 8, true);
-    writeString(8, 'WAVE');
-    writeString(12, 'fmt ');
-    view.setUint32(16, 16, true); // fmt chunk size
-    view.setUint16(20, 1, true); // audio format (PCM)
-    view.setUint16(22, numberOfChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, byteRate, true);
-    view.setUint16(32, blockAlign, true);
-    view.setUint16(34, 16, true); // bits per sample
-    writeString(36, 'data');
-    view.setUint32(40, dataSize, true);
-
-    // Convert float samples to 16-bit PCM
-    let offset = 44;
-    for (let i = 0; i < length; i++) {
-        for (let channel = 0; channel < numberOfChannels; channel++) {
-            const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
-            view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
-            offset += 2;
-        }
-    }
-
-    return new Blob([arrayBuffer], { type: 'audio/wav' });
-}
-
-// Cleanup on page unload
 window.addEventListener("beforeunload", () => {
     if (textWs) textWs.close();
     if (voiceWs) voiceWs.close();
-    if (isRecording) stopRecording();
-    if (currentAudioElement) {
-        currentAudioElement.pause();
-        currentAudioElement = null;
-    }
+    stopVoiceInteraction();
 });

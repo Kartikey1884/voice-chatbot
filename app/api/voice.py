@@ -1,6 +1,11 @@
 """
-Voice chat WebSocket endpoint - FULLY CORRECTED VERSION
-All fixes applied based on the issues seen in your screenshot
+Voice chat WebSocket endpoint - GOOGLE ASSISTANT STYLE
+Implements natural voice interaction with:
+- Continuous listening with Voice Activity Detection (VAD)
+- Automatic turn-taking (no button holding)
+- Barge-in support (interrupt assistant)
+- Real-time transcription feedback
+- Smart silence detection
 """
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -9,7 +14,7 @@ import os
 import base64
 import asyncio
 from datetime import datetime
-import random
+import json
 
 from app.services.chatbot import ChatBot
 from app.services.speech_to_text import transcribe_audio
@@ -17,476 +22,486 @@ from app.services.text_to_speech import generate_speech
 from app.core.logging import logger
 
 
-async def voice_chat_websocket(websocket: WebSocket, chatbot: ChatBot, active_sessions: Dict[str, Dict[str, Any]], get_or_create_session):
+# Voice interaction states
+class VoiceState:
+    IDLE = "idle"                    # Not listening, waiting for activation
+    LISTENING = "listening"          # Actively listening for user speech
+    PROCESSING = "processing"        # Processing user input (STT + LLM)
+    SPEAKING = "speaking"            # Bot is speaking
+    WAITING_FOR_CONTINUATION = "waiting"  # Brief pause to see if user continues
+
+
+async def voice_chat_websocket(
+    websocket: WebSocket, 
+    chatbot: ChatBot, 
+    active_sessions: Dict[str, Dict[str, Any]], 
+    get_or_create_session
+):
     """
-    WebSocket endpoint for VOICE chat with improved interaction
-    Handles: Audio → STT → LLM → TTS → Audio
-    SHARES SESSION with text mode
-    
-    FIXES APPLIED:
-    - Better audio validation (500 bytes minimum instead of 100)
-    - Improved transcription validation
-    - More natural timeouts (12s/20s instead of 8s/10s)
-    - Connection health monitoring
-    - User-friendly error messages
-    - Better state management
+    Google Assistant-style voice interaction
+    - Always listening when activated
+    - Automatic speech detection
+    - Natural turn-taking
+    - Interrupt capability
     """
     await websocket.accept()
-    logger.info("🎤 Voice chat connection accepted")
+    logger.info("🎤 Voice chat connection established - GOOGLE ASSISTANT MODE")
     
-    # Session state
+    # ========================================
+    # Session State
+    # ========================================
     session_id: Optional[str] = None
     user_name = chatbot.user_data["userProfile"]["personalInfo"]["firstName"]
     
-    # Timing and state
-    last_bot_finish_time: Optional[datetime] = None
+    # Voice interaction state
+    current_state = VoiceState.IDLE
+    last_activity_time: Optional[datetime] = None
+    
+    # Tasks
+    listening_task: Optional[asyncio.Task] = None
+    processing_task: Optional[asyncio.Task] = None
     timeout_task: Optional[asyncio.Task] = None
-    connection_task: Optional[asyncio.Task] = None
+    
+    # Session control
     session_active = True
-    bot_is_busy = False
-    follow_up_sent = False
-    user_is_speaking = False
+    is_playing_audio = False
+    
+    # Audio buffer for continuous listening
+    audio_buffer = []
+    is_speech_detected = False
+    speech_start_time = None
     
     
-    async def check_idle_timeout():
+    # ========================================
+    # Helper Functions
+    # ========================================
+    
+    async def send_state_update(state: str, **kwargs):
+        """Send state updates to client"""
+        try:
+            await websocket.send_json({
+                "type": "state_change",
+                "state": state,
+                **kwargs
+            })
+            logger.debug(f"📊 State: {state}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send state: {e}")
+    
+    
+    async def send_interim_transcript(text: str):
+        """Send real-time transcription updates"""
+        try:
+            await websocket.send_json({
+                "type": "interim_transcript",
+                "text": text
+            })
+        except Exception as e:
+            logger.error(f"❌ Failed to send interim: {e}")
+    
+    
+    async def monitor_session_timeout():
         """
-        Monitor idle time and send follow-up messages
-        ONLY when bot is not busy and user is not speaking
+        Auto-end session after prolonged inactivity
+        - 60 seconds of total inactivity ends session
+        - Resets on any user interaction
         """
-        nonlocal last_bot_finish_time, session_active, bot_is_busy, follow_up_sent, user_is_speaking
+        nonlocal session_active, last_activity_time
         
-        logger.info("⏱️ Idle timeout monitor started")
+        logger.info("⏱️ Session timeout monitor started (60s)")
         
         while session_active:
-            await asyncio.sleep(1)
+            await asyncio.sleep(5)
             
-            # Skip if bot is busy, user is speaking, or no activity yet
-            if bot_is_busy or user_is_speaking or last_bot_finish_time is None:
+            if last_activity_time is None:
                 continue
             
-            idle_seconds = (datetime.now() - last_bot_finish_time).total_seconds()
+            idle_seconds = (datetime.now() - last_activity_time).total_seconds()
             
-            # After 12 seconds (not 8), send follow-up
-            if idle_seconds >= 12 and not follow_up_sent:
-                follow_up_sent = True
-                bot_is_busy = True
-                
-                logger.info(f"⏱️ Sending follow-up after {idle_seconds:.1f}s idle")
-                
-                # More natural, less pushy follow-up messages
-                follow_up_messages = [
-                    "I'm here if you need anything else.",
-                    "Let me know if you have other questions.",
-                    "Take your time - I'm listening whenever you're ready."
-                ]
-                text = random.choice(follow_up_messages)
-                
-                try:
-                    audio_base64 = await generate_speech(text, "en")
-                    await websocket.send_json({
-                        "type": "audio",
-                        "text": text,
-                        "audio": audio_base64
-                    })
-                    # Reset timer after follow-up so we don't immediately goodbye
-                    last_bot_finish_time = datetime.now()
-                    bot_is_busy = False
-                except Exception as e:
-                    logger.error(f"❌ Error sending follow-up: {e}")
-                    bot_is_busy = False
-                    break
+            # Warning at 45 seconds
+            if idle_seconds >= 45 and idle_seconds < 50:
+                await websocket.send_json({
+                    "type": "timeout_warning",
+                    "seconds_remaining": 60 - int(idle_seconds)
+                })
             
-            # After 20 seconds total (not 10), and ONLY if follow-up was sent
-            elif idle_seconds >= 20 and follow_up_sent:
-                bot_is_busy = True
-                
-                logger.info(f"⏱️ Sending goodbye after {idle_seconds:.1f}s total idle")
-                
-                goodbye_messages = [
-                    f"Thank you for chatting with me, {user_name}! Feel free to reach out anytime.",
-                    f"It was great talking to you, {user_name}! Have a wonderful day!",
-                    f"Have a great day, {user_name}! I'm here whenever you need me."
-                ]
-                
-                text = random.choice(goodbye_messages)
-                
-                try:
-                    audio_base64 = await generate_speech(text, "en")
-                    await websocket.send_json({
-                        "type": "audio",
-                        "text": text,
-                        "audio": audio_base64
-                    })
-                    await asyncio.sleep(3)
-                    await websocket.send_json({"type": "session_end"})
-                    session_active = False
-                    logger.info("👋 Session ended due to inactivity")
-                except Exception as e:
-                    logger.error(f"❌ Error sending goodbye: {e}")
-                break
-    
-    
-    async def monitor_connection():
-        """Keep WebSocket connection alive with heartbeats"""
-        nonlocal session_active
-        
-        logger.info("💓 Connection monitor started")
-        
-        while session_active:
-            await asyncio.sleep(15)  # Check every 15 seconds
-            try:
-                await websocket.send_json({"type": "heartbeat"})
-            except Exception as e:
-                logger.error(f"❌ Connection health check failed: {e}")
+            # End session at 60 seconds
+            if idle_seconds >= 60:
+                logger.info(f"⏱️ Session timeout - 60s inactivity")
+                await websocket.send_json({
+                    "type": "session_end",
+                    "reason": "timeout"
+                })
                 session_active = False
                 break
     
     
-    def reset_idle_state():
-        """Reset idle tracking when user interacts"""
-        nonlocal follow_up_sent, last_bot_finish_time
-        follow_up_sent = False
-        last_bot_finish_time = None
-        logger.debug("🔄 Idle state reset")
+    async def process_user_speech(audio_data: str, language_hint: str = None):
+        """
+        Process user speech through the pipeline:
+        1. Speech-to-Text
+        2. LLM Response
+        3. Text-to-Speech
+        """
+        nonlocal current_state, last_activity_time
+        
+        current_state = VoiceState.PROCESSING
+        await send_state_update("processing", message="Transcribing...")
+        
+        try:
+            # ========================================
+            # STEP 1: Speech-to-Text
+            # ========================================
+            logger.info("🎤 Starting transcription...")
+            
+            audio_bytes = base64.b64decode(audio_data)
+            audio_size = len(audio_bytes)
+            
+            logger.info(f"📊 Audio: {audio_size} bytes")
+            
+            if audio_size < 1000:  # Minimum viable audio
+                logger.warning(f"⚠️ Audio too short: {audio_size} bytes")
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Audio too short. Please speak longer."
+                })
+                current_state = VoiceState.LISTENING
+                await send_state_update("listening")
+                return
+            
+            # Transcribe with timeout
+            try:
+                text, detected_language = await asyncio.wait_for(
+                    transcribe_audio(audio_bytes),
+                    timeout=30.0
+                )
+            except asyncio.TimeoutError:
+                logger.error("❌ STT timeout")
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Transcription timed out. Please try again."
+                })
+                current_state = VoiceState.LISTENING
+                await send_state_update("listening")
+                return
+            
+            if not text or len(text.strip()) < 2:
+                logger.warning(f"⚠️ Empty transcription")
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Couldn't understand. Please try again."
+                })
+                current_state = VoiceState.LISTENING
+                await send_state_update("listening")
+                return
+            
+            logger.info(f"✅ Transcribed: '{text}' ({detected_language})")
+            
+            # Send final transcription to client
+            await websocket.send_json({
+                "type": "transcription",
+                "text": text,
+                "language": detected_language,
+                "is_final": True
+            })
+            
+            # Update session
+            if session_id:
+                session_info = get_or_create_session(session_id)
+                session_info["message_count"] += 1
+            
+            # ========================================
+            # STEP 2: Get LLM Response
+            # ========================================
+            await send_state_update("thinking", message="Thinking...")
+            logger.info("🤖 Getting AI response...")
+            
+            full_response = ""
+            chunk_count = 0
+            
+            try:
+                async for chunk in chatbot.stream_response(text, session_id):
+                    full_response += chunk
+                    chunk_count += 1
+                    
+                    # Send streaming text to client
+                    await websocket.send_json({
+                        "type": "text_chunk",
+                        "text": chunk
+                    })
+                
+                logger.info(f"✅ Response: {chunk_count} chunks, {len(full_response)} chars")
+                
+                await websocket.send_json({
+                    "type": "text_complete",
+                    "text": full_response
+                })
+                
+            except Exception as llm_error:
+                logger.error(f"❌ LLM error: {llm_error}")
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Error generating response. Please try again."
+                })
+                current_state = VoiceState.LISTENING
+                await send_state_update("listening")
+                return
+            
+            # ========================================
+            # STEP 3: Text-to-Speech
+            # ========================================
+            current_state = VoiceState.SPEAKING
+            await send_state_update("speaking", message="Speaking...")
+            logger.info(f"🔊 Generating speech...")
+            
+            try:
+                # Use detected language or fallback to English
+                tts_language = detected_language if detected_language else "en"
+                
+                try:
+                    audio_base64 = await generate_speech(full_response, tts_language)
+                except Exception as tts_lang_error:
+                    logger.warning(f"⚠️ TTS failed for {tts_language}, using English")
+                    audio_base64 = await generate_speech(full_response, "en")
+                    tts_language = "en"
+                
+                # Send audio to client
+                await websocket.send_json({
+                    "type": "audio_response",
+                    "audio": audio_base64,
+                    "text": full_response,
+                    "language": tts_language
+                })
+                
+                logger.info(f"✅ Audio sent ({tts_language})")
+                
+            except Exception as tts_error:
+                logger.error(f"❌ TTS error: {tts_error}")
+                # Still send text even if audio fails
+                await websocket.send_json({
+                    "type": "text_only",
+                    "text": full_response,
+                    "error": "Audio generation failed"
+                })
+            
+            # Bot will transition to LISTENING after audio finishes
+            # (client sends "audio_playback_finished" event)
+            
+        except Exception as e:
+            logger.error(f"❌ Processing error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            await websocket.send_json({
+                "type": "error",
+                "message": "Processing error. Please try again."
+            })
+            
+            current_state = VoiceState.LISTENING
+            await send_state_update("listening")
     
+    
+    # ========================================
+    # WebSocket Message Handler
+    # ========================================
     
     try:
-        # Start connection health monitoring
-        connection_task = asyncio.create_task(monitor_connection())
+        # Start session timeout monitor
+        timeout_task = asyncio.create_task(monitor_session_timeout())
         
         while session_active:
             data = await websocket.receive_json()
             message_type = data.get("type", "")
             
-            logger.debug(f"📨 Received: {message_type}")
+            logger.debug(f"📨 Received: {message_type} (state: {current_state})")
             
             # ========================================
-            # 👋 GREETING on connection
+            # ACTIVATION / GREETING
             # ========================================
-            if message_type == "greet":
+            if message_type == "activate":
                 if not session_id:
                     session_id = data.get("session_id", os.urandom(8).hex())
-                    logger.info(f"🆕 Session created: {session_id[:8]}...")
+                    logger.info(f"🆕 Session: {session_id[:8]}...")
                 
                 session_info = get_or_create_session(session_id)
                 session_info["modes_used"].add("voice")
                 
                 is_new_session = session_info["message_count"] == 0
                 
-                bot_is_busy = True
-                reset_idle_state()
-                
+                # Send greeting
                 if is_new_session:
-                    text = f"Hi {user_name}! I'm ready to help. What's on your mind?"
+                    greeting = f"Hi {user_name}! I'm listening. How can I help you?"
                 else:
-                    text = f"Welcome back, {user_name}. I'm listening."
+                    greeting = f"I'm listening, {user_name}."
                 
-                logger.info(f"👋 Greeting: '{text}'")
+                logger.info(f"👋 Greeting: '{greeting}'")
+                
+                current_state = VoiceState.SPEAKING
+                await send_state_update("speaking", message=greeting)
                 
                 try:
-                    audio_base64 = await generate_speech(text, "en")
+                    audio_base64 = await generate_speech(greeting, "en")
                     await websocket.send_json({
-                        "type": "audio",
-                        "text": text,
+                        "type": "audio_response",
+                        "text": greeting,
                         "audio": audio_base64
                     })
-                    
-                    # Give user 5 seconds to think before starting idle timer
-                    await asyncio.sleep(5)
-                    bot_is_busy = False
-                    
-                    if timeout_task is None:
-                        timeout_task = asyncio.create_task(check_idle_timeout())
-                
                 except Exception as e:
-                    logger.error(f"❌ Error sending greeting: {e}")
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "Failed to send greeting. Please refresh and try again."
-                    })
-                    bot_is_busy = False
-                
-                continue
-            
-            # ========================================
-            # 🎤 USER AUDIO input
-            # ========================================
-            elif message_type == "audio":
-                logger.info("🎤 Processing audio input")
-                
-                # Update state
-                bot_is_busy = True
-                user_is_speaking = False
-                reset_idle_state()
-                
-                if not session_id:
-                    session_id = data.get("session_id", os.urandom(8).hex())
-                    logger.info(f"🆕 Session from audio: {session_id[:8]}...")
-                
-                session_info = get_or_create_session(session_id)
-                session_info["modes_used"].add("voice")
-                
-                # ========================================
-                # STEP 1: Validate and decode audio
-                # ========================================
-                try:
-                    audio_data = data.get("audio", "")
-                    if not audio_data:
-                        raise ValueError("No audio data provided")
-                    
-                    audio_bytes = base64.b64decode(audio_data)
-                    audio_size = len(audio_bytes)
-                    
-                    logger.info(f"📊 Audio size: {audio_size} bytes")
-                    
-                    # Better validation with helpful messages
-                    if audio_size < 500:  # Increased from 100 - catches very short recordings
-                        logger.warning(f"⚠️ Audio too short: {audio_size} bytes")
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": "Recording seems short. Hold the button and speak clearly."
-                        })
-                        bot_is_busy = False
-                        last_bot_finish_time = datetime.now()
-                        continue
-                    
-                    if audio_size > 10_000_000:  # 10MB limit
-                        logger.warning(f"⚠️ Audio too large: {audio_size} bytes")
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": "Recording too long. Keep under 1 minute."
-                        })
-                        bot_is_busy = False
-                        last_bot_finish_time = datetime.now()
-                        continue
-                    
-                except ValueError as ve:
-                    logger.error(f"❌ Audio validation error: {ve}")
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "Invalid audio format. Please try recording again."
-                    })
-                    bot_is_busy = False
-                    last_bot_finish_time = datetime.now()
-                    continue
-                except Exception as decode_error:
-                    logger.error(f"❌ Error decoding audio: {decode_error}")
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "Failed to decode audio. Please try again."
-                    })
-                    bot_is_busy = False
-                    last_bot_finish_time = datetime.now()
-                    continue
-                
-                # ========================================
-                # STEP 2: Transcribe audio
-                # ========================================
-                await websocket.send_json({"type": "status", "message": "Listening..."})
-                
-                try:
-                    # Add timeout to prevent hanging
-                    text, language = await asyncio.wait_for(
-                        transcribe_audio(audio_bytes),
-                        timeout=10.0
-                    )
-                    
-                    # Clean transcription
-                    text = text.strip() if text else ""
-                    
-                    # Log for debugging (helps catch "live" vs "leave" issues)
-                    logger.info(f"📝 Transcribed: '{text}' | Language: {language} | Length: {len(text)}")
-                    
-                    # Validate transcription
-                    if not text or len(text) < 2:
-                        logger.warning("⚠️ Empty or very short transcription")
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": "I couldn't hear that. Please speak a bit louder."
-                        })
-                        bot_is_busy = False
-                        last_bot_finish_time = datetime.now()
-                        continue
-                    
-                    # Check for gibberish (same letter repeated)
-                    unique_chars = len(set(text.lower().replace(" ", "")))
-                    if unique_chars <= 2:
-                        logger.warning(f"⚠️ Possible gibberish: '{text}'")
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": "That didn't sound clear. Could you try again?"
-                        })
-                        bot_is_busy = False
-                        last_bot_finish_time = datetime.now()
-                        continue
-                    
-                    # Validate and normalize language code
-                    if not language or len(language) < 2:
-                        language = "en"
-                    language = language[:2].lower()
-                    
-                    logger.info(f"✅ Valid transcription: '{text}' ({language})")
-                    
-                    # Send transcription to frontend
-                    await websocket.send_json({
-                        "type": "transcription",
-                        "text": text,
-                        "language": language
-                    })
-                
-                except asyncio.TimeoutError:
-                    logger.error("❌ STT timeout after 10 seconds")
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "Speech recognition took too long. Please try again."
-                    })
-                    bot_is_busy = False
-                    last_bot_finish_time = datetime.now()
-                    continue
-                    
-                except Exception as transcription_error:
-                    logger.error(f"❌ Transcription error: {transcription_error}")
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "Failed to transcribe audio. Please try speaking again."
-                    })
-                    bot_is_busy = False
-                    last_bot_finish_time = datetime.now()
-                    continue
-                
-                # ========================================
-                # STEP 3: Get chatbot response
-                # ========================================
-                await websocket.send_json({"type": "status", "message": "Thinking..."})
-                
-                try:
-                    logger.info("🤖 Getting response from chatbot...")
-                    
-                    # Stream text chunks to frontend
-                    full_response = ""
-                    chunk_count = 0
-                    
-                    async for chunk in chatbot.stream_response(text, session_id):
-                        full_response += chunk
-                        chunk_count += 1
-                        await websocket.send_json({
-                            "type": "text_chunk",
-                            "text": chunk
-                        })
-                    
-                    logger.info(f"✅ Response complete: {chunk_count} chunks, {len(full_response)} chars")
-                    
-                    # Send completion signal
-                    await websocket.send_json({
-                        "type": "text_complete",
-                        "text": full_response
-                    })
-                    
-                    session_info["message_count"] += 1
-                
-                except Exception as llm_error:
-                    logger.error(f"❌ LLM error: {llm_error}")
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "I'm having trouble processing that. Please try again."
-                    })
-                    bot_is_busy = False
-                    last_bot_finish_time = datetime.now()
-                    continue
-                
-                # ========================================
-                # STEP 4: Generate speech
-                # ========================================
-                await websocket.send_json({"type": "status", "message": "Speaking..."})
-                
-                try:
-                    logger.info(f"🔊 Generating speech ({language})...")
-                    
-                    # Try with detected language first
-                    try:
-                        audio_base64 = await generate_speech(full_response, language)
-                    except Exception as tts_lang_error:
-                        logger.warning(f"⚠️ TTS failed for {language}, using English: {tts_lang_error}")
-                        audio_base64 = await generate_speech(full_response, "en")
-                        language = "en"
-                    
-                    await websocket.send_json({
-                        "type": "audio",
-                        "audio": audio_base64,
-                        "text": full_response,
-                        "language": language
-                    })
-                    
-                    bot_is_busy = False
-                    logger.info(f"✅ Response sent successfully ({language})")
-                
-                except Exception as tts_error:
-                    logger.error(f"❌ TTS error: {tts_error}")
-                    # Send text-only response as fallback
+                    logger.error(f"❌ Greeting TTS error: {e}")
                     await websocket.send_json({
                         "type": "text_only",
-                        "text": full_response,
-                        "error": "Could not generate audio"
+                        "text": greeting
                     })
-                    bot_is_busy = False
-                    last_bot_finish_time = datetime.now()
+                
+                last_activity_time = datetime.now()
             
             # ========================================
-            # 🏓 Ping/Pong
+            # AUDIO PLAYBACK FINISHED
+            # ========================================
+            elif message_type == "audio_playback_finished":
+                logger.info("🔊 Audio playback finished")
+                
+                # Transition to listening state
+                current_state = VoiceState.LISTENING
+                await send_state_update("listening", message="I'm listening...")
+                
+                last_activity_time = datetime.now()
+            
+            # ========================================
+            # SPEECH DETECTED (from client VAD)
+            # ========================================
+            elif message_type == "speech_detected":
+                logger.info("🎤 Speech detected")
+                
+                # If bot is speaking, allow barge-in
+                if current_state == VoiceState.SPEAKING:
+                    logger.info("⚡ Barge-in! Interrupting bot")
+                    await websocket.send_json({
+                        "type": "interrupt_playback"
+                    })
+                
+                current_state = VoiceState.LISTENING
+                await send_state_update("listening", message="Listening...")
+                
+                last_activity_time = datetime.now()
+            
+            # ========================================
+            # SPEECH ENDED (from client VAD)
+            # ========================================
+            elif message_type == "speech_ended":
+                logger.info("🛑 Speech ended, waiting for audio...")
+                await send_state_update("waiting", message="Processing...")
+            
+            # ========================================
+            # USER AUDIO INPUT
+            # ========================================
+            elif message_type == "audio":
+                logger.info("🎤 Processing user audio")
+                
+                if current_state == VoiceState.PROCESSING:
+                    logger.warning("⚠️ Already processing, ignoring new audio")
+                    continue
+                
+                audio_data = data.get("audio", "")
+                language_hint = data.get("language_hint", None)
+                
+                if not audio_data:
+                    logger.warning("⚠️ No audio data received")
+                    continue
+                
+                # Process in background
+                asyncio.create_task(process_user_speech(audio_data, language_hint))
+                
+                last_activity_time = datetime.now()
+            
+            # ========================================
+            # INTERIM TRANSCRIPTION (for real-time feedback)
+            # ========================================
+            elif message_type == "interim_audio":
+                # For real-time transcription display (optional feature)
+                # This would require streaming STT, which is more complex
+                pass
+            
+            # ========================================
+            # MANUAL STOP (user stops manually)
+            # ========================================
+            elif message_type == "stop_listening":
+                logger.info("🛑 User stopped manually")
+                
+                if current_state == VoiceState.LISTENING:
+                    current_state = VoiceState.IDLE
+                    await send_state_update("idle", message="Stopped listening")
+            
+            # ========================================
+            # REACTIVATE (wake up after idle)
+            # ========================================
+            elif message_type == "wake_up":
+                logger.info("👂 Reactivating listening")
+                
+                current_state = VoiceState.LISTENING
+                await send_state_update("listening", message="I'm listening...")
+                
+                last_activity_time = datetime.now()
+            
+            # ========================================
+            # BARGE-IN (interrupt bot)
+            # ========================================
+            elif message_type == "barge_in":
+                logger.info("⚡ Barge-in requested")
+                
+                if current_state == VoiceState.SPEAKING:
+                    await websocket.send_json({
+                        "type": "interrupt_playback"
+                    })
+                    
+                    current_state = VoiceState.LISTENING
+                    await send_state_update("listening", message="I'm listening...")
+                
+                last_activity_time = datetime.now()
+            
+            # ========================================
+            # HEARTBEAT
             # ========================================
             elif message_type == "ping":
                 await websocket.send_json({"type": "pong"})
             
             # ========================================
-            # 🔇 Audio finished playing
+            # END SESSION
             # ========================================
-            elif message_type == "audio_finished":
-                last_bot_finish_time = datetime.now()
-                bot_is_busy = False
-                logger.info(f"🔊 Audio finished - Starting idle timer")
+            elif message_type == "end_session":
+                logger.info("🛑 User ended session")
+                await websocket.send_json({
+                    "type": "session_end",
+                    "reason": "user_request"
+                })
+                session_active = False
+                break
             
             # ========================================
-            # 🎤 User started speaking
-            # ========================================
-            elif message_type == "user_speaking":
-                user_is_speaking = True
-                reset_idle_state()
-                logger.info(f"🎤 User started speaking - Pausing timers")
-                
-                # Send interrupt signal to stop bot audio
-                await websocket.send_json({"type": "interrupt_audio"})
-            
-            # ========================================
-            # 🛑 User stopped speaking
-            # ========================================
-            elif message_type == "user_stopped_speaking":
-                user_is_speaking = False
-                logger.info(f"🛑 User stopped speaking")
-            
-            # ========================================
-            # ❓ Unknown message type
+            # UNKNOWN MESSAGE
             # ========================================
             else:
                 logger.warning(f"⚠️ Unknown message type: {message_type}")
     
     except WebSocketDisconnect:
-        logger.info(f"👋 Voice chat disconnected - Session: {session_id}")
+        logger.info(f"👋 Client disconnected - Session: {session_id}")
     
     except Exception as e:
-        logger.error(f"❌ Voice chat error: {e}")
+        logger.error(f"❌ WebSocket error: {e}")
         import traceback
-        logger.error(f"📋 Traceback:\n{traceback.format_exc()}")
+        logger.error(traceback.format_exc())
+        
         try:
             await websocket.send_json({
                 "type": "error",
-                "message": "An unexpected error occurred. Please refresh and try again."
+                "message": "Connection error. Please refresh."
             })
         except:
             pass
     
     finally:
         # ========================================
-        # Cleanup all background tasks
+        # Cleanup
         # ========================================
         session_active = False
         
@@ -497,11 +512,18 @@ async def voice_chat_websocket(websocket: WebSocket, chatbot: ChatBot, active_se
             except asyncio.CancelledError:
                 pass
         
-        if connection_task:
-            connection_task.cancel()
+        if listening_task:
+            listening_task.cancel()
             try:
-                await connection_task
+                await listening_task
             except asyncio.CancelledError:
                 pass
         
-        logger.info(f"🧹 Cleanup complete - Session: {session_id}")
+        if processing_task:
+            processing_task.cancel()
+            try:
+                await processing_task
+            except asyncio.CancelledError:
+                pass
+        
+        logger.info(f"🧹 Session cleanup complete - {session_id}")

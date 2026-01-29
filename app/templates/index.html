@@ -1,50 +1,429 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Groq Voice Assistant</title>
+    <title>AI Voice Assistant - Google Style</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    <link rel="stylesheet" href="/static/style.css"/>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            height: 90vh;
+            max-height: 800px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ========================================
+           HEADER
+        ======================================== */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .mode-switch {
+            display: flex;
+            gap: 10px;
+        }
+
+        .mode-btn {
+            padding: 8px 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .mode-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .mode-btn.active {
+            background: white;
+            color: #667eea;
+            border-color: white;
+        }
+
+        .clear-btn {
+            padding: 8px 20px;
+            background: rgba(244, 67, 54, 0.2);
+            border: 2px solid rgba(244, 67, 54, 0.3);
+            color: white;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .clear-btn:hover {
+            background: rgba(244, 67, 54, 0.4);
+        }
+
+        /* ========================================
+           STATUS BAR
+        ======================================== */
+        .status-bar {
+            padding: 15px 30px;
+            background: #f5f5f5;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .status-badge {
+            padding: 6px 15px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-text {
+            font-size: 14px;
+            color: #666;
+            flex: 1;
+        }
+
+        /* ========================================
+           MESSAGES AREA
+        ======================================== */
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            background: #fafafa;
+        }
+
+        .msg {
+            display: flex;
+            margin-bottom: 20px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .msg.user {
+            justify-content: flex-end;
+        }
+
+        .msg.bot {
+            justify-content: flex-start;
+        }
+
+        .msg.system {
+            justify-content: center;
+        }
+
+        .bubble {
+            max-width: 70%;
+            padding: 15px 20px;
+            border-radius: 20px;
+            font-size: 15px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .msg.user .bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .msg.bot .bubble {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .msg.system .bubble {
+            background: rgba(158, 158, 158, 0.2);
+            color: #666;
+            font-size: 13px;
+            text-align: center;
+            max-width: 90%;
+        }
+
+        .bubble.streaming-text::after {
+            content: "▌";
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        /* ========================================
+           INPUT AREA
+        ======================================== */
+        .input-area {
+            padding: 20px 30px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        #textMode {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        #textInput {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.3s ease;
+            resize: none;
+            max-height: 120px;
+        }
+
+        #textInput:focus {
+            border-color: #667eea;
+        }
+
+        #sendBtn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        #sendBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        #sendBtn:active {
+            transform: translateY(0);
+        }
+
+        /* ========================================
+           VOICE MODE
+        ======================================== */
+        #voiceBtn {
+            width: 100%;
+            height: 120px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 60px;
+            font-size: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #voiceBtn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 30px rgba(102, 126, 234, 0.6);
+        }
+
+        #voiceBtn:active {
+            transform: scale(0.95);
+        }
+
+        #voiceBtn.listening {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            }
+            50% {
+                box-shadow: 0 5px 40px rgba(102, 126, 234, 0.8);
+            }
+        }
+
+        #voiceBtn.processing {
+            background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+            animation: rotate 2s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        #voiceBtn.speaking {
+            background: linear-gradient(135deg, #9c27b0 0%, #e91e63 100%);
+            animation: breathe 1.5s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        /* ========================================
+           VISUALIZER
+        ======================================== */
+        #visualizer {
+            width: 100%;
+            height: 80px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            background: #f5f5f5;
+        }
+
+        /* ========================================
+           UTILITY
+        ======================================== */
+        .hidden {
+            display: none !important;
+        }
+
+        /* ========================================
+           SCROLLBAR
+        ======================================== */
+        .messages::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .messages::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .messages::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* ========================================
+           RESPONSIVE
+        ======================================== */
+        @media (max-width: 768px) {
+            .container {
+                height: 100vh;
+                max-height: none;
+                border-radius: 0;
+            }
+
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .mode-btn {
+                padding: 6px 15px;
+                font-size: 12px;
+            }
+
+            .bubble {
+                max-width: 85%;
+                font-size: 14px;
+            }
+
+            #voiceBtn {
+                height: 100px;
+                font-size: 40px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="app">
+    <div class="container">
+        <!-- Header -->
         <div class="header">
-            <div class="title">
-                <strong>⚡ Groq Voice Assistant</strong>
-                <span>Ultra-fast LLM • Free Edge TTS • Real-time</span>
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <span class="badge" id="statusBadge">Ready</span>
-                <button class="btn" onclick="clearChat()">Clear</button>
+            <h1>🤖 AI Voice Assistant</h1>
+            <div class="mode-switch">
+                <button class="mode-btn active" onclick="switchMode('text', this)">💬 Text</button>
+                <button class="mode-btn" onclick="switchMode('voice', this)">🎤 Voice</button>
+                <button class="clear-btn" onclick="clearChat()">🗑️ Clear</button>
             </div>
         </div>
 
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <span id="statusBadge" class="status-badge" style="background: rgba(76,175,80,0.2);">
+                Connected
+            </span>
+            <span id="status" class="status-text">
+                Ready to chat
+            </span>
+        </div>
+
+        <!-- Messages Area -->
         <div id="messages" class="messages">
-            <div class="msg bot">
-                <div class="bubble">
-                    Hi! I'm your voice assistant powered by Groq. Switch between voice and text mode below!
-                </div>
-            </div>
+            <!-- Messages will appear here -->
         </div>
 
-        <div>
-            <div id="status" class="status">Choose a mode to start</div>
+        <!-- Input Area -->
+        <div class="input-area">
+            <!-- Voice Mode -->
+            <div id="voiceMode" class="hidden">
+                <canvas id="visualizer"></canvas>
+                <button id="voiceBtn" onclick="toggleVoice()">🎤</button>
+            </div>
 
-            <div class="composer">
-                <div class="mode-toggle">
-                    <button class="mode-btn active" onclick="switchMode('text', this)">💬 Text</button>
-                    <button class="mode-btn" onclick="switchMode('voice', this)">🎤 Voice</button>
-                </div>
-
-                <div id="textMode" class="text-input-area">
-                    <input type="text" class="text-input" id="textInput"
-                        placeholder="Type your message..."
-                        onkeypress="handleKeyPress(event)">
-                    <button class="send-btn" id="sendBtn" onclick="sendTextMessage()">Send</button>
-                </div>
-                
-                <button class="voice-btn hidden" id="voiceBtn" onclick="toggleVoice()">🎤</button>
+            <!-- Text Mode -->
+            <div id="textMode">
+                <textarea 
+                    id="textInput" 
+                    rows="1"
+                    placeholder="Type your message..." 
+                    onkeypress="handleKeyPress(event)"
+                ></textarea>
+                <button id="sendBtn" onclick="sendTextMessage()">Send</button>
             </div>
         </div>
     </div>
