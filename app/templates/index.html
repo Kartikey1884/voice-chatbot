@@ -1,54 +1,67 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Groq Voice Assistant</title>
-
-    <link rel="stylesheet" href="/static/style.css"/>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Assistant</title>
+    <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-    <div class="app">
-        <div class="header">
-            <div class="title">
-                <strong>⚡ Groq Voice Assistant</strong>
-                <span>Ultra-fast LLM • Free Edge TTS • Real-time</span>
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <span class="badge" id="statusBadge">Ready</span>
-                <button class="btn" onclick="clearChat()">Clear</button>
-            </div>
+<div class="app">
+
+    <!-- ── Header ────────────────────────────────────────────── -->
+    <div class="header">
+        <div class="title">
+            <strong>✦ AI Assistant</strong>
+            <span>Powered by Groq · ElevenLabs · Edge STT</span>
         </div>
-
-        <div id="messages" class="messages">
-            <div class="msg bot">
-                <div class="bubble">
-                    Hi! I'm your voice assistant powered by Groq. Switch between voice and text mode below!
-                </div>
-            </div>
+        <div class="header-right">
+            <span class="badge" id="statusBadge">Ready</span>
+            <button class="btn" onclick="clearChat()">Clear</button>
         </div>
+    </div>
 
-        <div>
-            <div id="status" class="status">Choose a mode to start</div>
-
-            <div class="composer">
-                <div class="mode-toggle">
-                    <button class="mode-btn active" onclick="switchMode('text', this)">💬 Text</button>
-                    <button class="mode-btn" onclick="switchMode('voice', this)">🎤 Voice</button>
-                </div>
-
-                <div id="textMode" class="text-input-area">
-                    <input type="text" class="text-input" id="textInput"
-                        placeholder="Type your message..."
-                        onkeypress="handleKeyPress(event)">
-                    <button class="send-btn" id="sendBtn" onclick="sendTextMessage()">Send</button>
-                </div>
-                
-                <button class="voice-btn hidden" id="voiceBtn" onclick="toggleVoice()">🎤</button>
+    <!-- ── Messages ──────────────────────────────────────────── -->
+    <div id="messages" class="messages">
+        <div class="msg bot">
+            <div class="avatar">✦</div>
+            <div class="bubble">
+                Hi there! I'm your AI assistant. Switch between <strong>Text</strong> and <strong>Voice</strong> mode below to chat however feels natural.
             </div>
         </div>
     </div>
 
-    <script src="/static/script.js"></script>
+    <!-- ── Bottom ────────────────────────────────────────────── -->
+    <div>
+        <!-- status / waveform row -->
+        <div id="status" class="status">Choose a mode to start</div>
+
+        <!-- composer -->
+        <div class="composer">
+            <!-- mode pills -->
+            <div class="mode-toggle">
+                <button class="mode-btn active" onclick="switchMode('text', this)">💬 Text</button>
+                <button class="mode-btn"        onclick="switchMode('voice', this)">🎤 Voice</button>
+            </div>
+
+            <!-- text input (visible in text mode) -->
+            <div id="textMode" class="text-input-area">
+                <input
+                    type="text"
+                    class="text-input"
+                    id="textInput"
+                    placeholder="Type your message…"
+                    onkeypress="handleKeyPress(event)"
+                />
+                <button class="send-btn" id="sendBtn" onclick="sendTextMessage()">Send</button>
+            </div>
+
+            <!-- mic button (visible in voice mode) -->
+            <button class="voice-btn hidden" id="voiceBtn" onclick="toggleVoice()">🎤</button>
+        </div>
+    </div>
+</div>
+
+<script src="/static/script.js"></script>
 </body>
 </html>

@@ -1,15 +1,18 @@
 """
-FastAPI application entry point
-Separate WebSocket endpoints for voice and text chat
-WITH SHARED SESSION SUPPORT - conversation history persists across mode switches
+app/main.py
+───────────
+FastAPI entry point.
+
+• Serves the single-page frontend from app/templates/index.html
+• Mounts static assets from app/static/
+• Exposes two WebSocket endpoints that share one session store
+• Provides /health and /session/* management endpoints
 """
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
-import os
-from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
 
@@ -19,10 +22,9 @@ from app.services.chatbot import ChatBot
 from app.api.chat import text_chat_websocket
 from app.api.voice import voice_chat_websocket
 
-# Initialize FastAPI app
+# ── app & middleware ──────────────────────────────────────────
 app = FastAPI()
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -31,77 +33,65 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
 app.mount("/static", StaticFiles(directory=str(settings.STATIC_DIR)), name="static")
 
-# Initialize chatbot
+# ── singletons ────────────────────────────────────────────────
 chatbot = ChatBot()
 
-# 🔄 SHARED SESSION STORAGE
-# Stores conversation history across text and voice modes
+# Shared session metadata (separate from chatbot.sessions which holds message history).
+# Both text and voice WebSockets read/write the SAME entry so the user can
+# switch modes mid-conversation without losing context.
 active_sessions: Dict[str, Dict[str, Any]] = {}
 
 
 def get_or_create_session(session_id: str) -> Dict[str, Any]:
-    """Get existing session or create new one"""
+    """Return existing session metadata or create a fresh one."""
     if session_id not in active_sessions:
         active_sessions[session_id] = {
-            "created_at": datetime.now(),
+            "created_at":    datetime.now(),
             "last_activity": datetime.now(),
             "message_count": 0,
-            "modes_used": set()
+            "modes_used":    set(),
         }
-        logger.info(f"✨ Created new session: {session_id}")
+        logger.info("✨ New session: %s", session_id)
     else:
         active_sessions[session_id]["last_activity"] = datetime.now()
-        logger.info(f"📝 Using existing session: {session_id} (messages: {active_sessions[session_id]['message_count']})")
-    
     return active_sessions[session_id]
 
 
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    favicon_path = settings.STATIC_DIR / "favicon.ico"
-    if favicon_path.exists():
-        return FileResponse(str(favicon_path))
-    return Response(status_code=204)
-
+# ── WebSocket routes ──────────────────────────────────────────
 
 @app.websocket("/ws/text")
-async def text_chat_ws(websocket: WebSocket):
-    """Text chat WebSocket endpoint"""
+async def text_ws(websocket: WebSocket):
     await text_chat_websocket(websocket, chatbot, active_sessions, get_or_create_session)
 
 
 @app.websocket("/ws/voice")
-async def voice_chat_ws(websocket: WebSocket):
-    """Voice chat WebSocket endpoint"""
+async def voice_ws(websocket: WebSocket):
     await voice_chat_websocket(websocket, chatbot, active_sessions, get_or_create_session)
 
 
+# ── REST helpers ──────────────────────────────────────────────
+
 @app.get("/session/{session_id}")
-async def get_session_info(session_id: str):
-    """Get information about a session"""
+async def get_session(session_id: str):
     if session_id in active_sessions:
-        session = active_sessions[session_id]
+        s = active_sessions[session_id]
         return {
-            "session_id": session_id,
-            "created_at": session["created_at"].isoformat(),
-            "last_activity": session["last_activity"].isoformat(),
-            "message_count": session["message_count"],
-            "modes_used": list(session["modes_used"])
+            "session_id":    session_id,
+            "created_at":    s["created_at"].isoformat(),
+            "last_activity": s["last_activity"].isoformat(),
+            "message_count": s["message_count"],
+            "modes_used":    list(s["modes_used"]),
         }
     return {"error": "Session not found"}
 
 
 @app.delete("/session/{session_id}")
 async def clear_session(session_id: str):
-    """Clear a specific session"""
     if session_id in active_sessions:
         del active_sessions[session_id]
-        # Also clear from chatbot
-        if hasattr(chatbot, 'sessions') and session_id in chatbot.sessions:
-            del chatbot.sessions[session_id]
+        chatbot.clear_session(session_id)
         return {"message": "Session cleared", "session_id": session_id}
     return {"error": "Session not found"}
 
@@ -111,24 +101,30 @@ async def health():
     return {
         "status": "ok",
         "endpoints": {
-            "text_chat": "/ws/text",
+            "text_chat":  "/ws/text",
             "voice_chat": "/ws/voice",
-            "session_info": "/session/{session_id}",
-            "clear_session": "/session/{session_id} (DELETE)"
         },
         "model": settings.LLM_MODEL,
-        "tts": "edge-tts",
-        "stt": "faster-whisper",
+        "tts":   "elevenlabs",
+        "stt":   "edge-stt (browser)",
         "features": {
-            "shared_sessions": True,
-            "voice_auto_greeting": True,
-            "voice_idle_timeout": "20 seconds (after bot finishes)",
-            "voice_follow_up": "8 seconds (after bot finishes)",
-            "timer_pauses_during_bot_processing": True,
-            "cross_mode_context": True
+            "shared_sessions":          True,
+            "voice_auto_greeting":      True,
+            "voice_idle_follow_up":     "12 seconds after bot finishes",
+            "voice_idle_goodbye":       "20 seconds after follow-up",
+            "barge_in_interrupt":       True,
+            "cross_mode_context":       True,
         },
-        "active_sessions": len(active_sessions)
+        "active_sessions": len(active_sessions),
     }
+
+
+# ── favicon & SPA catch-all ───────────────────────────────────
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    path = settings.STATIC_DIR / "favicon.ico"
+    return FileResponse(str(path)) if path.exists() else Response(status_code=204)
 
 
 @app.get("/")
@@ -136,26 +132,17 @@ async def root():
     return FileResponse(str(settings.TEMPLATES_DIR / "index.html"))
 
 
-# For uvicorn command line usage:
-# uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# ── CLI entry point ───────────────────────────────────────────
 
 if __name__ == "__main__":
     import uvicorn
-    
-    # Validate settings
+
     if not settings.validate():
-        logger.warning("⚠️ Some required settings are missing. Check your .env file.")
-    
-    logger.info("🚀 Starting server...")
-    logger.info(f"📝 Text chat endpoint: ws://localhost:{settings.PORT}/ws/text")
-    logger.info(f"🎤 Voice chat endpoint: ws://localhost:{settings.PORT}/ws/voice")
-    logger.info("🔄 Shared sessions: Text & Voice modes share conversation history")
-    logger.info("⏱️  Voice features: Auto-greeting, 8s follow-up, 20s timeout")
-    logger.info("⏸️  Timer PAUSES while bot is processing/speaking")
-    
-    uvicorn.run(
-        "app.main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=True
-    )
+        logger.warning("⚠️  Some required settings are missing — check your .env file.")
+
+    logger.info("🚀 Starting server…")
+    logger.info("📝 Text  → ws://localhost:%d/ws/text", settings.PORT)
+    logger.info("🎤 Voice → ws://localhost:%d/ws/voice", settings.PORT)
+    logger.info("🔄 Shared sessions enabled | 🏃 Idle timers: 12 s follow-up / 20 s goodbye")
+
+    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=True)

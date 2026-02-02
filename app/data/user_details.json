@@ -2,9 +2,9 @@
     "userProfile": {
         "userId": "EMP-10234",
         "personalInfo": {
-            "firstName": "kartik",
+            "firstName": "Kartik",
             "lastName": "Sharma",
-            "email": "amit.sharma@company.com",
+            "email": "kartik.sharma@company.com",
             "phone": "+91-9876543210",
             "dateOfBirth": "1995-08-12",
             "address": {
@@ -37,11 +37,7 @@
             "status": "Active",
             "startDate": "2023-01-10",
             "endDate": null,
-            "technologies": [
-                "Node.js",
-                "MongoDB",
-                "AWS"
-            ]
+            "technologies": ["Node.js", "MongoDB", "AWS"]
         },
         {
             "projectId": "PRJ-002",
@@ -50,11 +46,7 @@
             "status": "Completed",
             "startDate": "2022-02-01",
             "endDate": "2022-11-30",
-            "technologies": [
-                "React",
-                "Java",
-                "PostgreSQL"
-            ]
+            "technologies": ["React", "Java", "PostgreSQL"]
         }
     ],
     "attendance": {
@@ -64,21 +56,9 @@
         "lastAttendanceStatus": "Present"
     },
     "leaveBalance": {
-        "annualLeave": {
-            "total": 24,
-            "used": 10,
-            "remaining": 14
-        },
-        "sickLeave": {
-            "total": 12,
-            "used": 3,
-            "remaining": 9
-        },
-        "casualLeave": {
-            "total": 6,
-            "used": 2,
-            "remaining": 4
-        }
+        "annualLeave":  { "total": 24, "used": 10, "remaining": 14 },
+        "sickLeave":    { "total": 12, "used": 3,  "remaining": 9  },
+        "casualLeave":  { "total": 6,  "used": 2,  "remaining": 4  }
     },
     "salaryDetails": {
         "currency": "INR",
