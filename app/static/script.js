@@ -15,6 +15,7 @@ let isPlayingAudio = false;
 let currentAudioElement = null; // Track current audio element
 let autoStartEnabled = true; // Flag to control auto-start after bot responses
 
+<<<<<<< Updated upstream
 const statusEl = document.getElementById("status");
 const statusBadgeEl = document.getElementById("statusBadge");
 const messagesEl = document.getElementById("messages");
@@ -24,6 +25,31 @@ const sendBtnEl = document.getElementById("sendBtn");
 const textModeEl = document.getElementById("textMode");
 
 /* -------- MODE SWITCH -------- */
+=======
+// let sessionId       = crypto.randomUUID();   // shared across both sockets
+let currentMode     = "text";
+let currentBotMessage = null;                // bubble element being streamed into
+let isPlayingAudio  = false;
+let currentAudio    = null;                  // <Audio> element currently playing
+let autoStartEnabled = true;                 // controls mic auto-restart
+
+/* ── DOM refs ──────────────────────────────────────────────── */
+const statusEl      = document.getElementById("status");
+const statusBadge   = document.getElementById("statusBadge");
+const messagesEl    = document.getElementById("messages");
+const voiceBtnEl    = document.getElementById("voiceBtn");
+const textInputEl   = document.getElementById("textInput");
+const sendBtnEl     = document.getElementById("sendBtn");
+const textModeEl = document.getElementById("textMode");
+
+function getSessionId() {
+  return localStorage.getItem("session_id");
+}
+console.log("SESSION ID:", getSessionId());
+/* ════════════════════════════════════════════════════════════
+   MODE SWITCH
+   ════════════════════════════════════════════════════════════ */
+>>>>>>> Stashed changes
 function switchMode(mode, btn) {
     const previousMode = currentMode;
     currentMode = mode;
@@ -111,8 +137,51 @@ function connectTextWebSocket() {
     };
 }
 
+<<<<<<< Updated upstream
 /* -------- VOICE SOCKET -------- */
 function connectVoiceWebSocket() {
+=======
+function sendTextMessage() {
+    const text = textInputEl.value.trim();
+    if (!text) return;
+    if (!textWs || textWs.readyState !== WebSocket.OPEN) {
+        setStatus("Not connected"); updateBadge("Disconnected", "rgba(239,68,68,0.2)"); return;
+    }
+
+    addMessage("user", text);
+    textInputEl.value = "";
+    setStatus("Thinking…");
+
+    textWs.send(JSON.stringify({ type: "text", text, session_id: localStorage.getItem("session_id") }));
+}
+
+function handleTextMsg(evt) {
+    const d = JSON.parse(evt.data);
+
+    if (d.type === "text_chunk") {
+        if (!currentBotMessage) currentBotMessage = addMessage("bot", "", true);
+        currentBotMessage.textContent += d.text;
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+    if (d.type === "text_complete") {
+        currentBotMessage = null;
+        setStatus("Type your message");
+    }
+    if (d.type === "error") {
+        setStatus("Error: " + d.message);
+        addMessage("system", "⚠️ " + d.message);
+    }
+}
+
+function handleKeyPress(e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendTextMessage(); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   VOICE WEBSOCKET
+   ════════════════════════════════════════════════════════════ */
+function connectVoiceWS() {
+>>>>>>> Stashed changes
     if (voiceWs && voiceWs.readyState === WebSocket.OPEN) return;
 
     setStatus("Connecting to voice chat...");
@@ -121,6 +190,7 @@ function connectVoiceWebSocket() {
     voiceWs = new WebSocket("ws://localhost:8000/ws/voice");
 
     voiceWs.onopen = () => {
+<<<<<<< Updated upstream
         setStatus("Connecting...");
         updateBadge("Connected", "rgba(76,175,80,0.2)");
         console.log("🎤 Voice mode connected with session:", sessionId);
@@ -130,6 +200,12 @@ function connectVoiceWebSocket() {
             type: "greet",
             session_id: sessionId
         }));
+=======
+        setStatus("Connecting…");
+        updateBadge("Connected", "rgba(66,133,244,0.2)");
+        // Request greeting with the shared session so history carries over
+        voiceWs.send(JSON.stringify({ type: "greet", session_id: getSessionId() }));
+>>>>>>> Stashed changes
     };
 
     voiceWs.onmessage = handleVoiceMessage;
@@ -370,7 +446,7 @@ async function stopRecording() {
                         voiceWs.send(JSON.stringify({
                             type: "audio",
                             audio: reader.result.split(",")[1],
-                            session_id: sessionId
+                            session_id: getSessionId()
                         }));
                         setStatus("Processing your voice...");
                         console.log("📤 Audio sent to backend (original format - fallback)");
@@ -389,6 +465,23 @@ async function stopRecording() {
                 setStatus("Error processing audio. Please try again.");
                 addMessage("system", "⚠️ Error processing audio. Please try recording again.");
             }
+<<<<<<< Updated upstream
+=======
+        } catch (err) {
+            // Fallback: send original blob
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+                    voiceWs.send(JSON.stringify({
+                        type: "audio",
+                        audio: reader.result.split(",")[1],
+                        session_id: getSessionId()
+                    }));
+                    setStatus("Processing your voice…");
+                }
+            };
+            reader.readAsDataURL(blob);
+>>>>>>> Stashed changes
         }
 
         // Clean up audio resources
@@ -533,6 +626,7 @@ function handleVoiceMessage(event) {
             voiceWs = null;
         }
 
+<<<<<<< Updated upstream
         // Create NEW session ID for next conversation
         sessionId = crypto.randomUUID();
         console.log("🔄 New session created:", sessionId);
@@ -541,6 +635,11 @@ function handleVoiceMessage(event) {
         setTimeout(() => {
             addMessage("system", "💬 Session ended. Click the microphone to start a new conversation.");
         }, 1000);
+=======
+setTimeout(() => {
+    addMessage("system", "💬 Session ended. You can start a new message.");
+}, 1000);
+>>>>>>> Stashed changes
     }
 
     if (data.type === "error") {
@@ -573,6 +672,7 @@ function addMessage(role, text, streaming = false) {
 
 function clearChat() {
     messagesEl.innerHTML = "";
+<<<<<<< Updated upstream
 
     // Generate NEW session ID
     const oldSessionId = sessionId;
@@ -600,6 +700,27 @@ function clearChat() {
 
     setStatus("Chat cleared. Starting fresh conversation...");
     addMessage("system", "🔄 New conversation started");
+=======
+    currentBotMessage = null;
+
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+        isPlayingAudio = false;
+    }
+
+    // Just reset UI, NOT session
+    if (currentMode === "text") {
+        if (textWs) textWs.close();
+        connectTextWS();
+    } else {
+        if (voiceWs) voiceWs.close();
+        connectVoiceWS();
+    }
+
+    setStatus("Chat cleared.");
+    addMessage("system", "🔄 Chat cleared");
+>>>>>>> Stashed changes
 }
 
 function setStatus(text) {
@@ -665,7 +786,28 @@ function audioBufferToWav(buffer) {
     return new Blob([arrayBuffer], { type: 'audio/wav' });
 }
 
+<<<<<<< Updated upstream
 // Cleanup on page unload
+=======
+/* ════════════════════════════════════════════════════════════
+   INIT  &  CLEANUP
+   ════════════════════════════════════════════════════════════ */
+window.addEventListener("load", () => {
+    const sessionId = getSessionId();
+
+    console.log("CHAT PAGE SESSION:", sessionId);
+
+    if (!sessionId) {
+        alert("Session missing. Please login again.");
+        window.location.href = "/";
+        return;
+    }
+
+    connectTextWS();
+    setStatus("Connected! Type your message…");
+});
+
+>>>>>>> Stashed changes
 window.addEventListener("beforeunload", () => {
     if (textWs) textWs.close();
     if (voiceWs) voiceWs.close();
@@ -674,4 +816,9 @@ window.addEventListener("beforeunload", () => {
         currentAudioElement.pause();
         currentAudioElement = null;
     }
+});
+
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  await fetch("/auth/logout", { method: "POST", credentials: "include" });
+  window.location.href = "/";
 });

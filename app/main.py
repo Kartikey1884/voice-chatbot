@@ -4,12 +4,16 @@ Separate WebSocket endpoints for voice and text chat
 WITH SHARED SESSION SUPPORT - conversation history persists across mode switches
 """
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+<<<<<<< Updated upstream
 from fastapi.responses import FileResponse, Response
 import os
 from pathlib import Path
+=======
+from fastapi.responses import FileResponse, Response, RedirectResponse
+>>>>>>> Stashed changes
 from datetime import datetime
 from typing import Dict, Any
 
@@ -18,6 +22,10 @@ from app.core.logging import logger
 from app.services.chatbot import ChatBot
 from app.api.chat import text_chat_websocket
 from app.api.voice import voice_chat_websocket
+from app.auth.routes import router as auth_router
+from app.auth.session import get_session as get_auth_session
+
+
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -33,6 +41,7 @@ app.add_middleware(
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(settings.STATIC_DIR)), name="static")
+app.include_router(auth_router)
 
 # Initialize chatbot
 chatbot = ChatBot()
@@ -57,6 +66,14 @@ def get_or_create_session(session_id: str) -> Dict[str, Any]:
         logger.info(f"📝 Using existing session: {session_id} (messages: {active_sessions[session_id]['message_count']})")
     
     return active_sessions[session_id]
+
+def get_user_context(session_id: str) -> dict:
+    auth_session = get_auth_session(session_id)
+
+    if not auth_session:
+        return {}
+
+    return auth_session["hrms"]["user"]
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -133,11 +150,24 @@ async def health():
 
 @app.get("/")
 async def root():
-    return FileResponse(str(settings.TEMPLATES_DIR / "index.html"))
+    return FileResponse(str(settings.TEMPLATES_DIR / "login.html"))
 
 
+<<<<<<< Updated upstream
 # For uvicorn command line usage:
 # uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+=======
+@app.get("/chat")
+async def chat_page(request: Request):
+    session_id = request.cookies.get("chatbot_session")
+
+    if not session_id or not get_auth_session(session_id):
+        return RedirectResponse("/")
+
+    return FileResponse(str(settings.TEMPLATES_DIR / "index.html"))
+
+# ── CLI entry point ───────────────────────────────────────────
+>>>>>>> Stashed changes
 
 if __name__ == "__main__":
     import uvicorn

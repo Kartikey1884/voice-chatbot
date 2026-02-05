@@ -37,10 +37,19 @@ class Settings:
     DATA_DIR: Path = BASE_DIR / "app" / "data"
     STATIC_DIR: Path = BASE_DIR / "app" / "static"
     TEMPLATES_DIR: Path = BASE_DIR / "app" / "templates"
+<<<<<<< Updated upstream
     
     # CORS Configuration
     CORS_ORIGINS: list = ["*"]  # In production, specify actual origins
     
+=======
+
+    # ── CORS ──────────────────────────────────────────────────
+    CORS_ORIGINS: list = ["*"]
+    
+    HRMS_BASE_URL = "http://192.168.1.198:8080"
+
+>>>>>>> Stashed changes
     @classmethod
     def validate(cls) -> bool:
         """Validate that required settings are present"""

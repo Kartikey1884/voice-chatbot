@@ -489,6 +489,7 @@ async def voice_chat_websocket(websocket: WebSocket, chatbot: ChatBot, active_se
         # Cleanup all background tasks
         # ========================================
         session_active = False
+<<<<<<< Updated upstream
         
         if timeout_task:
             timeout_task.cancel()
@@ -505,3 +506,13 @@ async def voice_chat_websocket(websocket: WebSocket, chatbot: ChatBot, active_se
                 pass
         
         logger.info(f"🧹 Cleanup complete - Session: {session_id}")
+=======
+        for task in (timeout_task, heartbeat_task):
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        logger.info("🧹 Voice cleanup done — session: %s", session_id)
+>>>>>>> Stashed changes

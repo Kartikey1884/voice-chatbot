@@ -101,6 +101,14 @@ async def transcribe_audio(audio_bytes: bytes) -> tuple[str, str]:
 def get_supported_languages():
     """Return list of languages supported by Whisper"""
     return [
+<<<<<<< Updated upstream
         "en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh",
         "hi", "ar", "tr", "pl", "nl", "sv", "da", "no", "fi"
     ]
+=======
+        "en", "es", "fr", "de", "it", "pt", "ru",
+        "ja", "ko", "zh", "hi", "ar", "tr", "pl",
+        "nl", "sv", "da", "no", "fi", "cs", "el",
+        "he", "id", "th", "uk", "vi", "ro", "ca",
+    ]
+>>>>>>> Stashed changes
