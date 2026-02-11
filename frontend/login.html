@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HRMS AI Assistant • Login</title>
+  <link rel="stylesheet" href="/assets/css/login.css" />
+</head>
+<body>
+  <div class="bg"></div>
+
+  <main class="container">
+    <section class="card">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>HRMS AI Assistant</h1>
+          <p class="sub">Login to continue</p>
+        </div>
+      </div>
+
+      <form id="loginForm" class="form">
+        <label>
+          <span>Username</span>
+          <input id="userName" type="text" autocomplete="username" placeholder="Enter Username" required />
+        </label>
+
+        <label>
+          <span>Password</span>
+          <input id="password" type="password" autocomplete="current-password" placeholder="Enter Password" required />
+        </label>
+
+        <label>
+          <span>Register Token</span>
+          <input id="registrationToken" type="text" placeholder="Enter Registration Token" required />
+        </label>
+
+        <div class="row">
+          <div class="status" id="status">Ready</div>
+          <button id="loginBtn" type="submit">Login</button>
+        </div>
+
+        <div class="error" id="errorBox" aria-live="polite"></div>
+      </form>
+    </section>
+  </main>
+
+  <script src="/assets/js/login.js"></script>
+</body>
+</html>
