@@ -1,0 +1,247 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 40%, #041d52 100%);
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* overflow: hidden; */
+  color: #eaf1ff;
+}
+
+/* Animated background glow */
+.background-glow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: radial-gradient(circle at 30% 30%, rgba(75,124,255,.35), transparent 60%);
+  filter: blur(120px);
+  z-index: 0;
+}
+
+@keyframes float {
+  from { transform: translate(-100px, -50px); }
+  to { transform: translate(100px, 80px); }
+}
+
+.login-wrapper {
+  position: relative;
+  z-index: 2;
+}
+
+.card {
+  width: 420px;
+  padding: 40px;
+  border-radius: 24px;
+  backdrop-filter: blur(25px);
+  background: rgba(18, 27, 47, 0.75);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 
+    0 20px 50px rgba(0,0,0,.5),
+    inset 0 0 40px rgba(75,124,255,.1);
+}
+
+.logo {
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+  background: linear-gradient(90deg, #4b7cff, #7aa2ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.subtitle {
+  font-size: 13px;
+  opacity: .7;
+  margin-bottom: 25px;
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  margin-top: 16px;
+  margin-bottom: 6px;
+  opacity: .8;
+}
+
+input {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(11, 18, 32, .8);
+  color: #fff;
+  outline: none;
+  font-size: 14px;
+  transition: all .1s ease;
+}
+
+input:focus {
+  border-color: #4b7cff;
+  box-shadow: 0 0 0 3px rgba(75,124,255,.25);
+  /* transform: scale(1.02); */
+}
+
+.input-group {
+  position: relative;
+}
+
+.toggle-password {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  opacity: .6;
+  transition: .3s;
+}
+
+.toggle-password:hover {
+  opacity: 1;
+}
+
+button {
+  margin-top: 25px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #4b7cff, #1d4ed8);
+  color: white;
+  position: relative;
+  overflow: hidden;
+  transition: all .3s ease;
+}
+
+button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(75,124,255,.4);
+}
+
+button:active {
+  transform: scale(.98);
+}
+
+.loader {
+  display: none;
+  width: 18px;
+  height: 18px;
+  border: 3px solid rgba(255,255,255,.3);
+  border-top: 3px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.msg {
+  margin-top: 15px;
+  font-size: 13px;
+  min-height: 18px;
+  opacity: .85;
+  transition: .3s;
+}
+
+
+/* ============================= */
+/* RESPONSIVE DESIGN */
+/* ============================= */
+
+/* Large tablets & small laptops */
+@media (max-width: 1024px) {
+  .card {
+    width: 90%;
+    max-width: 480px;
+  }
+}
+
+/* Tablets */
+@media (max-width: 768px) {
+  body {
+    padding: 20px;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .card {
+    width: 100%;
+    padding: 32px 24px;
+    border-radius: 20px;
+  }
+
+  h1 {
+    font-size: 22px;
+  }
+}
+
+/* Mobile phones */
+@media (max-width: 480px) {
+  body {
+    padding: 16px;
+    overflow: auto;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 100%;
+    padding: 20px;
+    border-radius: 18px;
+  }
+
+  .logo {
+    font-size: 18px;
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+  }
+
+  input {
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  button {
+    padding: 12px;
+    font-size: 14px;
+  }
+}
+
+/* Very small devices */
+@media (max-width: 360px) {
+  .card {
+    padding: 20px 14px;
+  }
+
+  input {
+    padding: 10px;
+  }
+
+  button {
+    padding: 10px;
+  }
+}

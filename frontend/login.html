@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HRMS Chatbot - Login</title>
+  <link rel="stylesheet" href="./assets/css/login.css" />
+</head>
+<body>
+
+  <div class="background-glow"></div>
+
+  <div class="login-wrapper">
+    <div class="card">
+      <div class="logo">HRMS</div>
+      <h1>Welcome Back</h1>
+      <p class="subtitle">Sign in to continue to your dashboard</p>
+
+      <label>Username</label>
+      <input id="userName" placeholder="Enter your username" />
+
+      <label>Password</label>
+      <div class="input-group">
+        <input id="password" type="password" placeholder="Enter your password" />
+        <span class="toggle-password" id="togglePassword">👁</span>
+      </div>
+
+      <label>Registration Token</label>
+      <input id="registrationToken" placeholder="Enter your token" />
+
+      <button id="loginBtn">
+        <span class="btn-text">Sign In</span>
+        <span class="loader" id="loader"></span>
+      </button>
+
+      <div class="msg" id="msg"></div>
+    </div>
+  </div>
+
+  <script src="./assets/js/login.js"></script>
+</body>
+</html>

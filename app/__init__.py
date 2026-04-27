@@ -1,3 +1,0 @@
-"""
-Voice Chatbot Application
-"""

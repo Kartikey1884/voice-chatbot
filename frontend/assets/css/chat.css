@@ -1,0 +1,364 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background: linear-gradient(135deg, #0f172a, #1e3a8a 40%, #041d52);
+  color: #e8eefc;
+    padding: 10px 10px 10px 10px;
+}
+
+/* ===== Layout ===== */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden; /* prevent page scroll */
+}
+
+/* ===== Top Bar ===== */
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  backdrop-filter: blur(12px);
+  background: rgba(18, 27, 47, 0.7);
+  border-radius: 16px 16px 0 0;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  background: linear-gradient(90deg, #4b7cff, #7aa2ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(18, 27, 47, .8);
+  border: 1px solid rgba(255,255,255,.1);
+  font-size: 14px;
+}
+
+.pill button {
+  border: 0;
+  background: transparent;
+  color: #e8eefc;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 999px;
+  transition: .2s;
+}
+
+.pill button.active {
+  background: #4b7cff;
+}
+
+.pill button:hover {
+  background: rgba(255,255,255,.1);
+}
+
+.secondary {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+}
+
+/* ===== Chat Area ===== */
+
+.chat-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.chat {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar */
+.chat::-webkit-scrollbar {
+  width: 6px;
+}
+.chat::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.2);
+  border-radius: 10px;
+}
+
+/* ===== Messages ===== */
+
+.row {
+  display: flex;
+  margin-bottom: 14px;
+}
+
+.row.user {
+  justify-content: flex-end;
+}
+
+.bubble {
+  max-width: 75%;
+  padding: 12px 16px;
+  border-radius: 16px;
+  line-height: 1.4;
+  font-size: 14px;
+  white-space: pre-wrap;
+  animation: fadeIn .2s ease-in-out;
+}
+
+.user .bubble {
+  background: linear-gradient(135deg, #4b7cff, #1d4ed8);
+}
+
+.assistant .bubble {
+  background: rgba(18, 27, 47, .9);
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== TTS button inside assistant bubble ===== */
+
+.assistant .bubble {
+  position: relative;
+  padding-bottom: 42px; /* space for the icon */
+}
+
+.bubble-text {
+  white-space: pre-wrap;
+}
+
+.tts-btn {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.08);
+  color: #e8eefc;
+
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 16px;
+  padding: 0;
+  box-shadow: none;
+  transform: none;
+}
+
+.tts-btn:hover {
+  background: rgba(255,255,255,.12);
+}
+
+.tts-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
+/* ===== Composer ===== */
+
+.composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 10px;
+  border-top: 1px solid rgba(255,255,255,.08);
+  background: rgba(18, 27, 47, 0.7);
+  backdrop-filter: blur(12px);
+  border-radius: 0 0 16px 16px;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.mode-toggle button {
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+}
+
+.mode-toggle button.active {
+  background: #4b7cff;
+}
+
+.input-area {
+    padding: 0 5px 0 0;
+    width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}   
+
+.chat-control {
+    width: 100%;
+    /* padding: 0 3px 0 3px; */
+  display: flex;
+  align-items: center;
+  justify-content: start;
+  gap: 10px;
+  /* margin-right: 10px; */
+}
+
+textarea {
+  flex: 1;
+  resize: none;
+  height: 50px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(11, 18, 32, .8);
+  color: #e8eefc;
+  outline: none;
+  font-size: 14px;
+}
+
+textarea:focus {
+  border-color: #4b7cff;
+  box-shadow: 0 0 0 3px rgba(75,124,255,.25);
+}
+
+button {
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 10px;
+  background: linear-gradient(135deg, #4b7cff, #1d4ed8);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: .2s;
+  margin: 0 2px;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(75,124,255,.4);
+}
+
+#voiceControls {
+  width: 100%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+#recBtn {
+  border: 1px solid white;
+  width: 70px;
+}
+
+
+/* ===============================
+   VOICE MODE UI
+================================= */
+
+/* Hide text controls */
+.app.voice-mode #textControls {
+  display: none;
+}
+
+/* Show only mic button */
+.app.voice-mode #voiceControls {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Make mic big and centered */
+.app.voice-mode #recBtn {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  font-size: 26px;
+  padding: 0;
+}
+
+/* Optional: center composer content */
+.app.voice-mode .composer {
+  justify-content: center;
+}
+
+.input-area {
+    padding: 0 5px 0 0;
+    width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ===== Mobile ===== */
+
+@media (max-width: 768px) {
+
+  .topbar {
+    flex-direction: column;
+    justify-content: center;
+    align-items: start;
+    gap: 10px;
+  }
+
+  .top-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+    
+  .title {
+    font-size: 16px;
+  }
+
+  .composer {
+    flex-wrap: wrap;
+  }
+
+  .app.voice-mode .composer {
+    flex-wrap: nowrap;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+  }
+
+
+  .mode-toggle {
+    width: 100%;
+    justify-content: start;
+    margin-bottom: 6px;
+  }
+
+  textarea {
+    flex: 1 1 100%;
+  }
+}
