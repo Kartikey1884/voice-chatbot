@@ -1,52 +1,53 @@
-from typing import Any, Dict, Tuple, Optional
-import httpx
-from app.config import HRMS_BASE_URL
+from __future__ import annotations
 
-AUTH_PATH = "/Hrms/mobile/user/authenticate"
+from typing import Any, Dict, Optional, Tuple
+
+import httpx
+
+from app.config import settings
+
+
+
 
 class HRMSClient:
-    def __init__(self) -> None:
-        self.base_url = HRMS_BASE_URL
+    def __init__(self, transport_or_client: httpx.AsyncHTTPTransport | httpx.AsyncClient) -> None:
+        if isinstance(transport_or_client, httpx.AsyncClient):
+            self.transport = transport_or_client._transport
+        else:
+            self.transport = transport_or_client
+        self.base_url = settings.HRMS_BASE_URL.rstrip("/")
 
     async def authenticate(
         self,
+        *,
         userName: str,
         password: str,
-        registrationToken: str
+        registrationToken: str,
     ) -> Tuple[Optional[Dict[str, Any]], Dict[str, str], int, str, Dict[str, str]]:
-        """
-        Calls HRMS authenticate endpoint using x-www-form-urlencoded (Postman style).
-        Never raises on 4xx/5xx. Returns (json_or_none, cookies, status_code, raw_text, headers).
-        """
-        url = f"{self.base_url}{AUTH_PATH}"
-        payload = {
-            "userName": userName,
-            "password": password,
-            "registrationToken": registrationToken,
-        }
+        """Never raises on 4xx/5xx. Returns (json_or_none, cookies, status_code, raw_text, headers)."""
+        url = f"{self.base_url.rstrip('/')}/{settings.HRMS_AUTH_PATH.lstrip('/')}"
+        payload = {"userName": userName, "password": password, "registrationToken": registrationToken}
 
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        # Reuse shared transport for connection pooling + isolated client for cookies
+        async with httpx.AsyncClient(transport=self.transport, timeout=30, follow_redirects=True) as client:
             resp = await client.post(
                 url,
-                data=payload,  # ✅ IMPORTANT (form/urlencoded), NOT json=
+                data=payload,
                 headers={
                     "Accept": "application/json",
                     "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent": "PostmanRuntime/7.0.0",  # helps mimic Postman
-                }
+                    "User-Agent": "PostmanRuntime/7.0.0",
+                },
             )
 
-        raw_text = resp.text
-        cookies = dict(resp.cookies)
-        headers = dict(resp.headers)
-
-        try:
-            data = resp.json()
-        except Exception:
-            data = None
-
-        return data, cookies, resp.status_code, raw_text, headers
-
+            raw_text = resp.text
+            cookies = dict(resp.cookies)
+            headers = dict(resp.headers)
+            try:
+                data = resp.json()
+            except Exception:
+                data = None
+            return data, cookies, resp.status_code, raw_text, headers
 
     async def get(
         self,
@@ -55,19 +56,45 @@ class HRMSClient:
         params: Dict[str, Any],
         cookies: Optional[Dict[str, str]] = None,
     ) -> tuple[int, Dict[str, str], str, Optional[dict]]:
-        url = f"{self.base_url}{path}"
-        async with httpx.AsyncClient(timeout=25, follow_redirects=True) as client:
+        url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
+        # Reuse shared transport for connection pooling + isolated client for cookies
+        async with httpx.AsyncClient(transport=self.transport, timeout=30, follow_redirects=True) as client:
             resp = await client.get(
                 url,
                 params=params,
                 cookies=cookies or {},
                 headers={"Accept": "application/json", "User-Agent": "PostmanRuntime/7.0.0"},
             )
+            raw = resp.text
+            headers = dict(resp.headers)
+            try:
+                js = resp.json()
+            except Exception:
+                js = None
+            return resp.status_code, headers, raw, js
 
-        raw = resp.text
-        headers = dict(resp.headers)
-        try:
-            js = resp.json()
-        except Exception:
-            js = None
-        return resp.status_code, headers, raw, js
+    async def post(
+        self,
+        path: str,
+        *,
+        params: Optional[Dict[str, Any]] = None,
+        json_body: Optional[Dict[str, Any]] = None,
+        cookies: Optional[Dict[str, str]] = None,
+    ) -> tuple[int, Dict[str, str], str, Optional[dict]]:
+        url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
+        # Reuse shared transport for connection pooling + isolated client for cookies
+        async with httpx.AsyncClient(transport=self.transport, timeout=30, follow_redirects=True) as client:
+            resp = await client.post(
+                url,
+                params=params or {},
+                json=json_body,
+                cookies=cookies or {},
+                headers={"Accept": "application/json", "User-Agent": "PostmanRuntime/7.0.0"},
+            )
+            raw = resp.text
+            headers = dict(resp.headers)
+            try:
+                js = resp.json()
+            except Exception:
+                js = None
+            return resp.status_code, headers, raw, js

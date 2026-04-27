@@ -1,0 +1,204 @@
+{
+  "document": {
+    "title": "Leave & Attendance Policy",
+    "organization": "Roongta Developers",
+    "tagline": "We Build Tomorrow",
+    "source": {
+      "type": "pdf",
+      "pages": 4
+    }
+  },
+  "sections": [
+    {
+      "id": "1",
+      "title": "Scope",
+      "content": [
+        "To provide a guiding principle to employees for availing different types of leaves available."
+      ]
+    },
+    {
+      "id": "2",
+      "title": "Applicability",
+      "content": [
+        "This policy is applicable to all permanent/ confirmed employees.",
+        "All those employees who are on a probation period/ trainees are not eligible for leave, but if they take any leave during the probation period, it would be considered as leave without pay."
+      ]
+    },
+    {
+      "id": "3",
+      "title": "Responsibilities",
+      "content": [
+        "Primary Responsibility: Employee",
+        "Secondary Responsibility: HOD"
+      ]
+    },
+    {
+      "id": "4",
+      "title": "Features & General Guidelines",
+      "content": [
+        "Leave is calculated and credited annually for the financial year.",
+        "Leave for employees joining later in the year shall be calculated on a pro-rata basis.",
+        "Leave cannot be claimed as a matter of right. When exigencies of company's work so require, the Sanctioning Authority may, at its discretion, refuse, reduce, the leave applied or revoke the leave already granted.",
+        "Yearly 12 Leaves shall be granted to employees completing probation period successfully with Roongta Developers."
+      ]
+    },
+    {
+      "id": "process_paid_leave",
+      "title": "Process of Availing Paid Leave",
+      "format": "table",
+      "columns": [
+        "Sr. No.",
+        "What (Activity)",
+        "Who (Responsibility)",
+        "How/ Document (Record)",
+        "When (Timely for Activity)"
+      ],
+      "rows": [
+        {
+          "sr_no": 1,
+          "what_activity": "The HOD & HR is to be informed about availing the EL with the purpose of the Leave",
+          "who_responsibility": "Employee",
+          "how_document_record": "Leave Application",
+          "when_timely_for_activity": [
+            "For 1-2 Days Leave - Inform before 24 Hours",
+            "For More than 2 Days Leave - Inform before min 2 Working days",
+            "For more than 7 days Leave - MD Approval is Required"
+          ]
+        },
+        {
+          "sr_no": 2,
+          "what_activity": "Approval of the leave",
+          "who_responsibility": "HOD",
+          "how_document_record": "Leave Application",
+          "when_timely_for_activity": [
+            "5 days before the commencement of PL"
+          ]
+        },
+        {
+          "sr_no": 3,
+          "what_activity": "Contact address and phone number to be provided to the HOD before going on leave",
+          "who_responsibility": "Employee",
+          "how_document_record": "Email / Leave Application",
+          "when_timely_for_activity": [
+            "With leave Application"
+          ]
+        },
+        {
+          "sr_no": 4,
+          "what_activity": "Recording of leave",
+          "who_responsibility": "Management",
+          "how_document_record": "Leave Application",
+          "when_timely_for_activity": [
+            "As and when PL is Availed by any Employee"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "leave_encashment",
+      "title": "Leave Encashment Policy",
+      "content": [
+        "Leave Encashment shall be applicable to employees after completing their 3rd Year Onwards from its date of joining on the Basis of Gross Salary of March Month (Said Financial Year's last month)."
+      ],
+      "format": "table",
+      "columns": ["Working Span", "Criteria"],
+      "rows": [
+        {
+          "working_span": "3rd Year to 4th Year",
+          "criteria": [
+            "50% Encashment of Leave Balance",
+            "Up to 5 Leave C/F and the rest will get Lapsed"
+          ]
+        },
+        {
+          "working_span": "4th Year Onwards",
+          "criteria": [
+            "Up to 100% Leave Encashable (As per Management's decision)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "5",
+      "title": "Leave during Notice Period",
+      "content": [
+        "Employees are not entitled to any leave during the notice period."
+      ]
+    },
+    {
+      "id": "6",
+      "title": "Sandwich leaves",
+      "content": [
+        "The Sandwich policy is a general policy- where a usual week off gets clubbed with applied leave by the employee just near the week off and is treated as unpaid leave on off by the company."
+      ]
+    },
+    {
+      "id": "7",
+      "title": "Flexi leave / Short leave",
+      "content": [
+        "Once a month of 2 hours flexi shall be allowed with prior approval of immediate head.",
+        "Short leave can be applied from after one month of joining."
+      ]
+    },
+    {
+      "id": "8",
+      "title": "Unauthorized Leave",
+      "content": [
+        "Employees taking Leave without any prior approval will be considered as Unauthorized leave.",
+        "Circumstances in case of Unauthorized leave be as under:",
+        "First time - Deduction of double salary of unauthorized leave days",
+        "Second time - Deduction of double salary of unauthorized leave days + Warning Letter",
+        "Third time - It may lead up to Harsh Disciplinary action."
+      ]
+    },
+    {
+      "id": "9",
+      "title": "Punch-in / Punch-out rule",
+      "content": [
+        "Miss punch is not acceptable in a case for Forgotten punch for both Punch (in and out punch).",
+        "If Punch not done due to technical issue in HRMS, please inform to Security person to mark your time and get authorization done by your HOD/ NHA within 24 hours.",
+        "In case of Outdoor duty, get authorization done by your HOD/ NHA within 24 hours."
+      ]
+    },
+    {
+      "id": "10",
+      "title": "Late check-in rule",
+      "content": [
+        "We have given 15 minutes relaxation as a Flexi time on Arrival time (10:00 a.m. to 10:15 a.m.). You need to punch your attendance on or before 10:15 a.m.",
+        "If your punch time is 10:15 a.m. onwards, it will be considered as a Late mark up to 10:45 a.m.",
+        "4 late marks up to 15 mins are allowed in a month.",
+        "5th onwards, each late mark will be considered as a Half Day for each additional late mark."
+      ]
+    },
+    {
+      "id": "11",
+      "title": "Half day leave policy",
+      "content": [
+        "For availing a Half Day, you need to complete at least 04:00 hours of Duty in a day.",
+        "It must be either in the First half or in Second half."
+      ]
+    },
+    {
+      "id": "12",
+      "title": "Working on Week off / Holiday",
+      "content": [
+        "If any employee works on a Week off / Holiday, he/she must have completed 03 hours duty to get half day comp off and 06 hours for full day comp off.",
+        "If it is required to come on a Week off or Holiday, it is compulsory to take approval from HOD and information to HR Department with proper specified reason.",
+        "Once comp off is generated, it will be valid till 1.5 months from the date of Generation.",
+        "Once it is expired, it will not be carried forward/ regenerate."
+      ]
+    },
+    {
+      "id": "management_rights",
+      "title": "Management Rights",
+      "content": [
+        "Management reserves all rights to make changes, update, or modifications in this Policy anytime."
+      ]
+    }
+  ],
+  "approval": {
+    "approved_by_title": "Managing Director",
+    "approved_date": "01-06-2025",
+    "signature_present": true
+  }
+}

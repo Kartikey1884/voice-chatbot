@@ -3,48 +3,40 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HRMS AI Assistant • Login</title>
-  <link rel="stylesheet" href="/assets/css/login.css" />
+  <title>HRMS Chatbot - Login</title>
+  <link rel="stylesheet" href="./assets/css/login.css" />
 </head>
 <body>
-  <div class="bg"></div>
 
-  <main class="container">
-    <section class="card">
-      <div class="brand">
-        <div class="logo"></div>
-        <div>
-          <h1>HRMS AI Assistant</h1>
-          <p class="sub">Login to continue</p>
-        </div>
+  <div class="background-glow"></div>
+
+  <div class="login-wrapper">
+    <div class="card">
+      <div class="logo">HRMS</div>
+      <h1>Welcome Back</h1>
+      <p class="subtitle">Sign in to continue to your dashboard</p>
+
+      <label>Username</label>
+      <input id="userName" placeholder="Enter your username" />
+
+      <label>Password</label>
+      <div class="input-group">
+        <input id="password" type="password" placeholder="Enter your password" />
+        <span class="toggle-password" id="togglePassword">👁</span>
       </div>
 
-      <form id="loginForm" class="form">
-        <label>
-          <span>Username</span>
-          <input id="userName" type="text" autocomplete="username" placeholder="Enter Username" required />
-        </label>
+      <label>Registration Token</label>
+      <input id="registrationToken" placeholder="Enter your token" />
 
-        <label>
-          <span>Password</span>
-          <input id="password" type="password" autocomplete="current-password" placeholder="Enter Password" required />
-        </label>
+      <button id="loginBtn">
+        <span class="btn-text">Sign In</span>
+        <span class="loader" id="loader"></span>
+      </button>
 
-        <label>
-          <span>Register Token</span>
-          <input id="registrationToken" type="text" placeholder="Enter Registration Token" required />
-        </label>
+      <div class="msg" id="msg"></div>
+    </div>
+  </div>
 
-        <div class="row">
-          <div class="status" id="status">Ready</div>
-          <button id="loginBtn" type="submit">Login</button>
-        </div>
-
-        <div class="error" id="errorBox" aria-live="polite"></div>
-      </form>
-    </section>
-  </main>
-
-  <script src="/assets/js/login.js"></script>
+  <script src="./assets/js/login.js"></script>
 </body>
 </html>

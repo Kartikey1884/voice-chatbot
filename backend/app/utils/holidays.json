@@ -1,0 +1,95 @@
+{
+  "company": {
+    "name": "Roongta Developers",
+    "address": "4th Floor, Roongta Shopping Center, VIP Road, Vesu, Surat, Gujarat"
+  },
+  "document_title": "List of Public Holidays",
+  "year": 2026,
+  "policy": {
+    "fixed_holidays": "Public Holidays (Fixed) will be given, as notified by the company at the beginning of each Calendar year.",
+    "special_declaration": "In case the working of the office is likely to be hampered on account of any reason, the company may declare a public holiday or weekly holiday (except National Holidays) to be a normal working day and declare the affected day to be a holiday.",
+    "working_hours_review": "The Working hour's policy will be reviewed on Quarterly basis.",
+    "management_rights": "The management and the HR Department reserve the right, at its sole discretion, to change, modify, add, remove, delete, any above terms and conditions without any prior notice and its decision shall be final and binding."
+  },
+  "holidays": [
+    {
+      "sr_no": 1,
+      "name": "New Year Day",
+      "date": "2026-01-01",
+      "day": "Thursday",
+      "type": "Festival Holiday",
+      "remarks": "Except sales team, sales team can compensate this leave with another day."
+    },
+    {
+      "sr_no": 2,
+      "name": "Makar Sankranti",
+      "date": "2026-01-14",
+      "day": "Wednesday",
+      "type": "Festival Holiday",
+      "remarks": null
+    },
+    {
+      "sr_no": 3,
+      "name": "Republic Day",
+      "date": "2026-01-26",
+      "day": "Monday",
+      "type": "National Holiday",
+      "remarks": "Except sales team, sales team can compensate this leave with another day."
+    },
+    {
+      "sr_no": 4,
+      "name": "Holi 2nd Day",
+      "date": "2026-03-04",
+      "day": "Wednesday",
+      "type": "Festival Holiday",
+      "remarks": null
+    },
+    {
+      "sr_no": 5,
+      "name": "Independence Day",
+      "date": "2026-08-15",
+      "day": "Saturday",
+      "type": "National Holiday",
+      "remarks": "Except sales team, sales team can compensate this leave with another day."
+    },
+    {
+      "sr_no": 6,
+      "name": "Rakshabandhan",
+      "date": "2026-08-28",
+      "day": "Friday",
+      "type": "Festival Holiday",
+      "remarks": null
+    },
+    {
+      "sr_no": 7,
+      "name": "Anant Chaturdashi (Ganesh Visarjan)",
+      "date": "2026-09-25",
+      "day": "Friday",
+      "type": "National Holiday",
+      "remarks": null
+    },
+    {
+      "sr_no": 8,
+      "name": "Mahatma Gandhi Jayanti",
+      "date": "2026-10-02",
+      "day": "Friday",
+      "type": "National Holiday",
+      "remarks": "Except sales team, sales team can compensate this leave with another day."
+    },
+    {
+      "sr_no": 9,
+      "name": "Diwali",
+      "date": "2026-11-07",
+      "day": "Saturday",
+      "type": "Festival Holiday",
+      "remarks": null
+    }
+  ],
+  "notes": {
+    "post_diwali_resumption": "After Diwali Holiday, Office/Site Work will resume from Labh Pancham 2026-11-14 Saturday"
+  },
+  "approval": {
+    "approved_by": "MD",
+    "signature": "Signed"
+  }
+}

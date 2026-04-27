@@ -1,49 +1,50 @@
-const form = document.getElementById("loginForm");
-const statusEl = document.getElementById("status");
-const errorBox = document.getElementById("errorBox");
-const loginBtn = document.getElementById("loginBtn");
+const msg = document.getElementById('msg');
+const loader = document.getElementById('loader');
+const btn = document.getElementById('loginBtn');
+const togglePassword = document.getElementById('togglePassword');
 
-function setStatus(text) { statusEl.textContent = text; }
-function setError(text) { errorBox.textContent = text || ""; }
+togglePassword.addEventListener('click', () => {
+  const passwordInput = document.getElementById('password');
+  const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+  passwordInput.setAttribute('type', type);
+});
 
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  setError("");
+btn.onclick = async () => {
+  msg.textContent = 'Logging in...';
+  loader.style.display = 'inline-block';
+  btn.disabled = true;
 
-  const userName = document.getElementById("userName").value.trim();
-  const password = document.getElementById("password").value.trim();
-  const registrationToken = document.getElementById("registrationToken").value.trim();
-
-  if (!userName || !password || !registrationToken) {
-    setError("All fields are required.");
-    return;
-  }
-
-  loginBtn.disabled = true;
-  setStatus("Logging in...");
+  const body = {
+    userName: document.getElementById('userName').value.trim(),
+    password: document.getElementById('password').value,
+    registrationToken: document.getElementById('registrationToken').value.trim(),
+  };
 
   try {
-    const res = await fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ userName, password, registrationToken })
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({
+      ok: false,
+      message: 'Invalid response'
+    }));
 
-    if (!data.ok) {
-      setStatus("Failed");
-      setError(data.message || "Login failed.");
-      loginBtn.disabled = false;
-      return;
+    if (data.ok) {
+      msg.textContent = 'Success. Redirecting...';
+      msg.style.color = '#4ade80';
+      window.location.href = '/chat';
+    } else {
+      msg.textContent = data.message || 'Login failed';
+      msg.style.color = '#f87171';
     }
-
-    setStatus("Success");
-    window.location.href = "/chat";
   } catch (err) {
-    setStatus("Error");
-    setError("Network error. Check server and try again.");
-    loginBtn.disabled = false;
+    msg.textContent = 'Network error. Please try again.';
+    msg.style.color = '#f87171';
   }
-});
+
+  loader.style.display = 'none';
+  btn.disabled = false;
+};
